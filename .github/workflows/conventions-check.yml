@@ -1,0 +1,39 @@
+name: Convention checks
+
+# Enforces the git conventions from AGENTS.md §6 / ADR-0003 (branch naming, Conventional Commit
+# subjects in the PR range, a Conventional-Commit-valid PR title — squash merge makes it the
+# permanent subject on main) and the supply-chain pinning rule from AGENTS.md §7 / ADR-0004
+# (every action pinned to a full commit SHA). Pure bash + coreutils — nothing is installed.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check that all actions are SHA-pinned
+        run: bash scripts/check-workflow-pins.sh
+
+  git-conventions:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # Branch name, SHAs, and PR title are attacker-controlled strings — pass them via env,
+      # never inline in `run:` (script-injection hardening per GitHub's security guide).
+      - name: Check branch name, commit subjects, and PR title
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: bash scripts/check-git-conventions.sh "$HEAD_REF" "$BASE_SHA..$HEAD_SHA" "$PR_TITLE"

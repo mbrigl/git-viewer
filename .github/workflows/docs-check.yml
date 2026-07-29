@@ -1,0 +1,22 @@
+name: Docs & ADR checks
+
+# Enforces the documentation rules from AGENTS.md and docs/adr/README.md as CI:
+# ADR index integrity (every ADR listed, statuses in sync), relative-link integrity, and
+# section-reference integrity (§N references match AGENTS.md's numbered headings).
+# Pure bash + coreutils — nothing is installed.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check documentation consistency
+        run: bash scripts/check-docs.sh
