@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = [
+    "src-tauri",
+    "crates/adapter-git",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96"
+
+[workspace.dependencies]
+adapter-git = { path = "crates/adapter-git" }

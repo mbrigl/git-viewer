@@ -1,8 +1,11 @@
 {
   // Enable GitHub Copilot to read AGENTS.md as agent instructions.
   "chat.useAgentsMdFile": true,
-  "files.eol": "\n",
+  "git.autofetch": true,
+  "git.confirmSync": false,
   "editor.formatOnSave": true,
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 1000,
 
   // Manage the *host's* containers from VS Code without mounting the Docker socket into the Dev
   // Container (see ADR-0002): keep the container-management extension on the host (UI) side even
@@ -10,5 +13,20 @@
   "remote.extensionKind": {
     "ms-azuretools.vscode-containers": ["ui"],
     "ms-azuretools.vscode-docker": ["ui"]
+  },
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "bun.runtime": "bun",
+  "svelte.enable-ts-plugin": true,
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "oven.bun-vscode"
+  },
+  "[css]": {
+    "editor.defaultFormatter": "vscode.css-language-features"
+  },
+  "[svelte]": {
+    "editor.defaultFormatter": "svelte.svelte-vscode"
   }
 }

@@ -1,0 +1,19 @@
+{
+  "name": "gitgraph",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "src-web"
+  ],
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri",
+    "vite:dev": "vite",
+    "vite:build": "vite build",
+    "vite:preview": "vite preview"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  }
+}

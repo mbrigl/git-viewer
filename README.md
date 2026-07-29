@@ -1,39 +1,73 @@
-# NUC — an Agentic, Specification-Oriented Starter Template
+# GitGraph
 
-<!-- Replace hivevm/nuc with your own repository, or remove this badge. -->
-[![Docs & ADR checks](https://github.com/hivevm/nuc/actions/workflows/docs-check.yml/badge.svg)](https://github.com/hivevm/nuc/actions/workflows/docs-check.yml)
+[![Docs & ADR checks](https://github.com/mbrigl/git-viewer/actions/workflows/docs-check.yml/badge.svg)](https://github.com/mbrigl/git-viewer/actions/workflows/docs-check.yml)
 
-**NUC** — in beekeeping, the small *nucleus colony* a full hive grows from — is a starting point for
-building software **with coding agents** inside a ready-to-use
-Dev Container. The work is driven by a written **specification** ([`docs/SPECIFICATION.md`](docs/SPECIFICATION.md))
-and **Architecture Decision Records** ([`docs/adr/`](docs/adr/)), so intent and the reasoning
-behind every structural choice stay explicit and reviewable.
+A **GitKraken-style** commit graph viewer for local git repositories: every branch a straight
+vertical column, every merge an orthogonal connection, the newest commit at the top. The work is
+driven by a written **specification** ([`docs/SPECIFICATION.md`](docs/SPECIFICATION.md)) and
+**Architecture Decision Records** ([`docs/adr/`](docs/adr/)), so intent and the reasoning behind
+every structural choice stay explicit and reviewable.
 
 > For agent instructions, see [`AGENTS.md`](AGENTS.md) — the single source of truth for all coding agents.
 
 > [!NOTE]
-> **Using this template.** This repository is a scaffold — turn it into your own project:
->
-> 1. Replace the project name **NUC** everywhere it appears — the title and the intro sentence above,
->    and `"name"` in [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json) — and repoint
->    the CI badge (currently `hivevm/nuc`) to your own repository, or remove it.
-> 2. Write your specification in [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) and record
->    structural decisions as ADRs in [`docs/adr/`](docs/adr/).
-> 3. Fill in the **Overview**, **Build, Test & Run**, and **Usage** sections below.
-> 4. Add your language toolchain (the base image ships none).
-> 5. Configure the GitHub repository settings that repository files cannot enforce: a **ruleset on
->    `main`** that requires pull requests, requires the **Docs & ADR checks** and **Convention
->    checks** status checks, and blocks force pushes and branch deletion; enable **secret scanning
->    with push protection** and **private vulnerability reporting** (see [`SECURITY.md`](SECURITY.md)).
->
-> Project-specific conventions belong in the specification and ADRs — [`AGENTS.md`](AGENTS.md)
-> stays constant and is not edited per project. Leave the **Dev Container**, **Coding Agents**, and
-> **Project Layout** sections as-is; they describe the scaffold. Delete this note once you're done.
+> **Repository setup.** Some settings cannot be enforced by repository files and must be configured
+> in the GitHub repository settings: a **ruleset on `main`** that requires pull requests, requires the
+> **Docs & ADR checks** and **Convention checks** status checks, and blocks force pushes and branch
+> deletion; **secret scanning with push protection**; and **private vulnerability reporting**
+> (see [`SECURITY.md`](SECURITY.md)).
 
 ## Overview
 
-Describe what this project does, who it is for, and its main goals. The full problem statement,
-goals, and vocabulary live in [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md).
+Git history is a directed acyclic graph, but the usual tools flatten it into a list or draw it as
+ASCII art that becomes unreadable once several branches run in parallel. GitGraph draws that
+graph properly: time runs downwards, each branch line keeps its own column, and merges are drawn as
+unambiguous orthogonal edges.
+
+```
+ ● abc1234   main   Fix login bug                    Alice      2024-01-12 14:30
+ ●─┐ def567         Merge feature/oauth into main    Bob        2024-01-11 09:15
+ │ ● ghi890  feat   Add OAuth2 support               Carol      2024-01-10 17:42
+ │ ● jkl012         Refactor auth module             Carol      2024-01-09 11:20
+ ●─┘ mno345         Update dependencies              Alice      2024-01-08 16:05
+ ● pqr678           Initial commit                   Dave       2024-01-01 10:00
+```
+
+The layout follows the algorithms described in Pierre Vigier's article
+[*Commit Graph Drawing Algorithms*](https://pvigier.github.io/2019/05/06/commit-graph-drawing-algorithms.html).
+The full problem statement, the algorithms, and the project vocabulary live in
+[`docs/SPECIFICATION.md`](docs/SPECIFICATION.md).
+
+### Features
+
+| Feature                | Details                                                              |
+| ---------------------- | -------------------------------------------------------------------- |
+| **Straight branches**  | All commits of a branch line share one vertical column                |
+| **Merge lines**        | Orthogonal L-shaped lines for merge edges                             |
+| **Branch/tag chips**   | Colored pill labels (green = local, blue = remote, amber = tag)       |
+| **Dark & light theme** | Switchable from the status bar; branch colors stay identical          |
+| **Stash & WIP rows**   | Stash entries and uncommitted changes appear as marked graph nodes     |
+| **Virtual rendering**  | Only visible rows are painted — smooth on large repositories          |
+| **Commit detail**      | Select a row to see full SHA, message, author, date, and committer     |
+| **Background loading** | History loads off the UI thread; the UI stays responsive              |
+| **Commit limit**       | Up to 3 000 commits per load                                          |
+
+### Implementation
+
+The application is a Rust/Tauri desktop app. Loading history and computing the layout happen in
+Rust; the graph is drawn by a TypeScript frontend on a canvas inside the Tauri WebView.
+
+| Component       | Details                                                            |
+| --------------- | ------------------------------------------------------------------ |
+| **UI**          | Svelte 5 + TypeScript + Vite in a Tauri shell                      |
+| **Git backend** | git2 (libgit2 bindings), called on Tokio's blocking pool           |
+| **Graph model** | `Node` (wraps `CommitData`), `Edge` — index arena, no object graph  |
+| **Layout**      | `crates/adapter-git/src/graph.rs`                                  |
+| **Git loading** | `crates/adapter-git/src/git.rs`                                    |
+
+The layout logic is specified independently of the UI toolkit — see
+[`docs/SPECIFICATION.md`](docs/SPECIFICATION.md) — so it can be reasoned about and tested without
+starting the application.
 
 ## Prerequisites
 
@@ -42,10 +76,15 @@ goals, and vocabulary live in [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md).
   extension — or any DevContainer-compatible IDE
 - Docker / Podman (rootless) available on the host
 
-## Getting Started
+For building the application:
 
-> Setting the project up for the first time? See **Using this template** above for the one-time
-> steps. This section covers the everyday workflow.
+- Rust 1.96+ (see [`rust-toolchain.toml`](rust-toolchain.toml))
+- [Bun](https://bun.sh/) — the JavaScript package manager and task runner
+  ([ADR-0017](docs/adr/0017-bun-package-manager.md)); provided inside the Dev Container
+- The [Tauri prerequisites](https://tauri.app/start/prerequisites/) for your OS
+  (WebView2 on Windows, webkit2gtk on Linux)
+
+## Getting Started
 
 1. Open the repository in VS Code and choose **Reopen in Container** — the Dev Container and
    preconfigured agent extensions build automatically.
@@ -54,28 +93,79 @@ goals, and vocabulary live in [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md).
 
 ## Build, Test & Run
 
-<!-- Fill in once the toolchain is chosen. This section is the single source for build/test/run
-     commands — both humans and agents rely on it (AGENTS.md links here). -->
+<!-- This section is the single source for build/test/run commands — both humans and agents rely
+     on it (AGENTS.md links here). -->
 
-- **Build:** TODO <!-- e.g. `make build` -->
-- **Test:** TODO <!-- e.g. `make test` -->
-- **Run:** TODO <!-- e.g. `make run` -->
+```bash
+# Install dependencies from the lockfile (first time, and after dependency changes)
+bun install --frozen-lockfile
+
+# Development mode — hot-reloading frontend + Rust backend
+bun run tauri dev
+
+# Production build
+bun run tauri build
+
+# Frontend build on its own (compiles the Svelte components)
+bun run --cwd src-web build
+
+# Test & lint
+cargo test
+bun test src-web
+cargo clippy --all-targets -- -D warnings
+cargo fmt --all --check
+```
+
+CI runs exactly these commands on every pull request
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) — keep the two in step.
 
 ## Usage
 
-<!-- Once there is something to use, show how to use the built software: the primary commands or
-     API, a minimal example, and the expected output. Keep build/test/run mechanics in the section
-     above — this section is about using the result, not producing it. -->
+Start the application (`bun run tauri dev`, or the binary produced by `bun run tauri build`) and
+open a repository — either via the folder picker in the toolbar or by passing a path.
 
-TODO — show a minimal example of using the project.
+The graph loads in the background, with progress shown in the status bar. Scroll through the
+history; branch and tag chips mark the commits the refs point at. Select any row to see the commit
+detail — SHA, message, author, date and committer — plus the files it changed, in a flat or tree
+view; selecting a file opens its diff over the graph.
+
+> Specification Goal 6 additionally asks for a commit's **parents and children** in that detail
+> panel. That part is not implemented yet: the serialized node carries no parent or child field.
+
+## Roadmap
+
+Direction beyond the current feature set, roughly in priority order. Anything here that turns out to
+constrain the architecture gets an ADR before it is implemented.
+
+1. **Edge layer avoidance** — route edges to prevent crossings instead of always using a plain
+   L-shape (starting points: Sugiyama-style layered layout, edge bundling).
+2. **Performance** — profile rendering on large repositories; optimise column assignment for very
+   wide graphs.
+3. **Merge commit visualisation** — mark merge commits distinctly (e.g. diamond or double circle).
+4. **Interactive exploration** — search and filter by author, message, or date range; highlight a
+   commit's ancestry and descendants; filter by branch or tag.
+5. **Column width and zoom** — dynamic lane width, horizontal zoom and pan.
+6. **Better ref display** — tooltips or a separate ref legend instead of inline chips only.
+7. **Export** — save the visible graph as PNG or SVG.
+8. **Multiple repositories** — side-by-side comparison.
+9. **Theming** — configurable fonts and branch colors on top of the existing dark/light themes.
+10. **Commit statistics** — commits per author, density heatmap.
 
 ## Project Layout
 
 ```
 README.md             # overview & setup for humans
 AGENTS.md             # single source of truth for coding agents
-docs/SPECIFICATION.md # the specification: problem, goals, vocabulary
+docs/SPECIFICATION.md # the specification: problem, goals, algorithms, vocabulary
 docs/adr/             # Architecture Decision Records (+ template)
+crates/adapter-git/   # git access + layout — no Tauri dependency (ADR-0018)
+  src/models.rs       #   data types: CommitData, Node, Edge, NodeJson, Graph
+  src/git.rs          #   git2 integration — discover repo, walk refs, load commits
+  src/graph.rs        # ★ layout algorithms — temporal sort, straight branches, edges
+src-tauri/            # Tauri shell (binary `gitgraph`, lib `gitgraph_lib`)
+  src/commands.rs     #   Tauri commands: open_repo, browse_repo, select_commit
+  src/lib.rs          #   Tauri app setup — plugins, command wiring
+src-web/              # Svelte 5 + TypeScript + Vite frontend, canvas rendering
 .devcontainer/        # Dev Container definition (base image + Features)
 .vscode/              # shared editor settings
 .claude/CLAUDE.md     # pointer for Claude Code to read AGENTS.md

@@ -34,4 +34,42 @@ in the repository root). ADRs derive from the specification in [`docs/SPECIFICAT
 | [0003](0003-git-conventions.md) | Git conventions: branches, Conventional Commits, squash merge | 🟡 proposed |
 | [0004](0004-secrets-and-supply-chain.md) | Secrets handling and supply-chain pinning | 🟡 proposed |
 | [0005](0005-versioning-and-releases.md) | Versioning and release process | 🟡 proposed |
+| [0006](0006-pvigier-layout-algorithm.md) | Commit graph layout after Pvigier — rows and columns | 🟡 proposed |
+| [0007](0007-orthogonal-edges-instead-of-bezier.md) | Orthogonal L-shaped edges with short rounded corners | 🟡 proposed |
+| [0008](0008-index-arena-instead-of-object-graph.md) | Index arena instead of a reference-linked object graph | 🟡 proposed |
+| [0009](0009-commit-limit-3000.md) | Commit limit of 3 000 per repository load | 🟡 proposed |
+| [0010](0010-virtual-rendering.md) | Virtual rendering — paint only the visible rows | 🟡 proposed |
+| [0011](0011-rust-tauri-technology-base.md) | Rust + Tauri as the implementation technology | 🟡 proposed |
+| [0012](0012-git2-on-spawn-blocking.md) | git2 on `spawn_blocking` instead of an async git library | 🟡 proposed |
+| [0013](0013-diff-overlay-covers-canvas.md) | Inspecting a commit's changes — diff overlay, flat and tree file list | 🟡 proposed |
+| [0014](0014-theming-css-variables-and-canvas-palette.md) | Dark/light theming via CSS variables and a canvas palette | 🟡 proposed |
+| [0015](0015-svelte-frontend-framework.md) | Svelte 5 as the frontend framework | 🟡 proposed |
+| [0016](0016-local-only-no-egress-hardened-webview.md) | Local-only frontend — no third-party egress, hardened WebView | 🟡 proposed |
+| [0017](0017-bun-package-manager.md) | Bun as the JavaScript package manager and task runner | 🟡 proposed |
+| [0018](0018-adapter-git-as-separate-crate.md) | The git and layout core lives in a separate `adapter-git` crate | 🟡 proposed |
+| [0019](0019-synthetic-stash-and-workdir-nodes.md) | Stashes and uncommitted changes as synthetic nodes | 🟡 proposed |
+
+**Consolidation history.** While every ADR involved was still `proposed`, and while nothing outside
+this directory referenced their numbers, three pairs were consolidated and the set was then renumbered
+so that it runs without gaps — the exemption in Process item 6.
+
+- Row assignment was folded into [ADR-0006](0006-pvigier-layout-algorithm.md), which now covers both
+  layout phases.
+- The edge corner style was folded into
+  [ADR-0007](0007-orthogonal-edges-instead-of-bezier.md), which now states the edge shape once.
+- The changed-files list was folded into
+  [ADR-0013](0013-diff-overlay-covers-canvas.md), which now covers the whole
+  inspect-a-commit workflow.
+
+The numbering above is the result; the three absorbed ADRs have no separate record.
+
+**The exemption is spent — this was the last renumbering.** Item 6 applies in full from here:
+numbers are permanent, and neither renumbering nor consolidation is available again. A decision is
+changed only by a new ADR that supersedes it.
+
+**Where the procedures live.** These ADRs record *decisions* — what was chosen, what was rejected,
+and what follows. The normative step-by-step behaviour of the layout, the edge shapes and the
+rendering window lives once, in [`docs/SPECIFICATION.md`](../SPECIFICATION.md), which is the
+constitution (`AGENTS.md` §3). ADRs point at it instead of restating it: two copies of a procedure
+drift, and that is exactly how earlier contradictions between the specification and the ADRs arose.
 

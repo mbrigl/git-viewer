@@ -1,7 +1,9 @@
 {
-  "name": "NUC DevContainer",
+  "name": "DevContainer",
 
-  "image": "mcr.microsoft.com/devcontainers/base:debian",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "workspaceFolder": "/workspace",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
 
@@ -24,9 +26,10 @@
   // access to the host Docker daemon (no socket mount) — see ADR-0002. Manage the host's containers
   // from a host-side VS Code extension instead (README → "Host container management").
   "features": {
-    // GitHub CLI (`gh`) — used by the coding agent for GitHub operations and as the git
-    // credential helper. Git writes still require explicit human approval (see AGENTS.md).
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    // Rust toolchain via rustup; rust-toolchain.toml pins the version.
+    "ghcr.io/devcontainers/features/rust:1": {},
+    // Bun is the JS package manager and build tool.
+    "ghcr.io/devcontainers-extra/features/bun:1": {}
   },
 
   "customizations": {
@@ -40,7 +43,8 @@
     }
   },
 
-  "forwardPorts": [],
+  // 1420: Vite dev server of the UI Layer (`bun tauri dev`).
+  "forwardPorts": [1420],
 
   "hostRequirements": {
     "cpus": 2,

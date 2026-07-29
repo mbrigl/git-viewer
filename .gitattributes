@@ -1,0 +1,4 @@
+# Shell scripts must be checked out with LF: bash rejects CRLF, and a global
+# core.autocrlf=true would otherwise rewrite them on checkout and break the
+# CI check scripts under scripts/ when run locally.
+*.sh text eol=lf
