@@ -9,6 +9,10 @@ Update the **Unreleased** section in the same change as any user-visible modific
 
 ### Added
 
+- A **release pipeline** (ADR-0020): pushing a `v*` tag builds installers for Windows (`.msi`,
+  NSIS `.exe`), macOS (`.dmg` for Apple Silicon and Intel), and Linux (`.deb`, `.rpm`, AppImage)
+  plus one distribution-independent **Flatpak bundle**, and attaches them all to a draft GitHub
+  release for the maintainer to publish. Binaries are unsigned until certificates exist.
 - **Merge commits carry a double-circle marker** in the graph — an inner ring inside the node
   glyph whenever a commit has more than one parent.
 - The diff viewer offers a **side-by-side view** next to the unified one, switchable in the diff

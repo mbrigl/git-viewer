@@ -56,11 +56,18 @@ Releases are performed manually by a maintainer (never by an agent — see
 per [ADR-0005](docs/adr/0005-versioning-and-releases.md). Before 1.0.0, minor versions may contain
 breaking changes.
 
-1. Move the content of `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) into a new
+1. Bump `version` under `[workspace.package]` in the workspace [`Cargo.toml`](Cargo.toml) — the
+   single source of truth. `src-tauri` inherits it via `version.workspace`,
+   [`tauri.conf.json`](src-tauri/tauri.conf.json) carries no version of its own, and the release
+   pipeline builds and names the draft from it. The pipeline refuses a tag that disagrees with it.
+2. Move the content of `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) into a new
    `## [X.Y.Z] - YYYY-MM-DD` section (leave `[Unreleased]` in place, empty).
-2. Commit (`chore: release vX.Y.Z`) and merge via the normal PR workflow.
-3. Tag the release commit: `git tag -a vX.Y.Z -m "vX.Y.Z"` and push the tag.
-4. Create the GitHub release from the changelog section: `gh release create vX.Y.Z`.
+3. Commit (`chore: release vX.Y.Z`) and merge via the normal PR workflow.
+4. Tag the release commit: `git tag -a vX.Y.Z -m "vX.Y.Z"` and push the tag. The release
+   pipeline ([`.github/workflows/release.yml`](.github/workflows/release.yml), ADR-0020) builds
+   the installers — dmg (arm64 + x86_64), msi + NSIS exe, deb, rpm, AppImage, and a Flatpak
+   bundle — and attaches them to a **draft** GitHub release.
+5. Review the draft on GitHub, paste the changelog section as release notes, and publish it.
 
 ## Reporting security issues
 
