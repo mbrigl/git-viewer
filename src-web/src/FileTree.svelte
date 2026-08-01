@@ -52,7 +52,7 @@
       onkeydown={(e) => e.key === 'Enter' && onSelectFile(node.file)}
     >
       <span class="file-spacer"></span>
-      <span class="file-status {node.file.status.toLowerCase()}">{node.file.status[0]}</span>
+      <span class="file-status {node.file.status}">{node.file.status[0]}</span>
       <span class="file-path" title={node.file.path}>
         {#if node.file.oldPath}
           <span class="file-old-path">{node.file.oldPath.split('/').pop()}</span>

@@ -4,9 +4,11 @@
   import { onMount } from 'svelte';
   import GraphCanvas, { EMPTY_GRAPH_WIDTH, graphAreaWidth } from './GraphCanvas.svelte';
   import DiffViewer from './DiffViewer.svelte';
-  import FileTree from './FileTree.svelte';
-  import { buildFileTree } from './fileTree.ts';
-  import type { GraphData, NodeJson, FileChange } from './types.ts';
+  import SearchBox from './SearchBox.svelte';
+  import CommitDetail from './CommitDetail.svelte';
+  import StatusBar, { READY_STATUS } from './StatusBar.svelte';
+  import { lineageRows } from './ancestry.ts';
+  import type { GraphData, NodeJson, FileChange, DiffLine } from './types.ts';
 
   // ── Theme ────────────────────────────────────────────────────────────────
   type Theme = 'dark' | 'light';
@@ -36,10 +38,17 @@
 
   // ── State ──────────────────────────────────────────────────────────────────
   let graphData       = $state<GraphData | null>(null);
-  let status          = $state('Ready — open a repository to start');
+  let status          = $state(READY_STATUS);
   let repoLabel       = $state('(no repository)');
   let currentRepoPath = $state<string | null>(null);
   let selectedNode    = $state<NodeJson | null>(null);
+  let graphCanvas     = $state<{ revealRow: (row: number) => void; clearSelection: () => void } | null>(null);
+  let searchBox       = $state<{ focusSearch: () => void } | null>(null);
+  const nodeBySha     = $derived(new Map((graphData?.nodes ?? []).map(n => [n.sha, n])));
+  const nodeByRow     = $derived(new Map((graphData?.nodes ?? []).map(n => [n.row, n])));
+  // Lineage highlight: rows of the selected commit, its loaded ancestors, and
+  // its descendants; null (no selection) means nothing is dimmed.
+  const highlightRows = $derived(selectedNode ? lineageRows(selectedNode, nodeBySha) : null);
   // Width of the graph lane area — the column header mirrors the canvas layout.
   const graphColWidth = $derived.by(() => {
     const nodes = graphData?.nodes ?? [];
@@ -49,13 +58,58 @@
     return graphAreaWidth(maxCol);
   });
   let changedFiles    = $state<FileChange[]>([]);
-  let fileViewMode    = $state<'flat' | 'tree'>('tree');
-  const fileTree      = $derived(buildFileTree(changedFiles));
 
-  interface DiffLine { kind: string; content: string; oldLineno: number | null; newLineno: number | null; }
   let diffLines       = $state<DiffLine[]>([]);
   let diffFile        = $state<string | null>(null);
   let diffLoading     = $state(false);
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+
+  /** True when the key event targets a text-editing element — those keep
+      their native key handling and are excluded from graph shortcuts. */
+  function isEditableTarget(e: KeyboardEvent): boolean {
+    const t = e.target as HTMLElement | null;
+    return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+  }
+
+  /** Escape: deselect the commit, which also lifts the ancestry dim. */
+  function clearSelection(): void {
+    selectedNode = null;
+    changedFiles = [];
+    diffFile = null;
+    diffLines = [];
+    graphCanvas?.clearSelection();
+  }
+
+  /** ↑/↓: step the selection one row; ↓ with nothing selected starts at row 0. */
+  function moveSelection(delta: 1 | -1): void {
+    if (!graphData || graphData.nodes.length === 0) return;
+    const node = nodeByRow.get(selectedNode ? selectedNode.row + delta : 0);
+    if (!node) return;
+    graphCanvas?.revealRow(node.row);
+    onSelectCommit(node.sha);
+  }
+
+  /** Global shortcuts: Ctrl/Cmd+F focuses the search field; Escape closes the
+      diff overlay, then clears the selection; ↑/↓ walk the commit rows. */
+  function onWindowKeydown(e: KeyboardEvent): void {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      e.preventDefault();
+      searchBox?.focusSearch();
+      return;
+    }
+    if (isEditableTarget(e)) return;
+    if (e.key === 'Escape') {
+      if (diffFile !== null) closeDiff();
+      else clearSelection();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveSelection(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveSelection(-1);
+    }
+  }
 
   // ── Tauri event listeners ──────────────────────────────────────────────────
   onMount(() => {
@@ -63,6 +117,10 @@
       listen<string>('load-graph', (e) => {
         try {
           graphData = typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload;
+          // Rows are reassigned on every load, so a selection from the previous
+          // graph would point at the wrong node (and dim the wrong ancestry).
+          selectedNode = null;
+          changedFiles = [];
         } catch {
           status = 'Error parsing graph data';
         }
@@ -94,12 +152,20 @@
   }
 
   function onSelectCommit(sha: string): void {
-    const node = graphData?.nodes.find(n => n.sha === sha) ?? null;
+    const node = nodeBySha.get(sha) ?? null;
     selectedNode = node;
     changedFiles = [];
     diffFile = null;
     diffLines = [];
     invoke('select_commit', { sha }).catch(() => {});
+  }
+
+  /** Jump to a node from the sidebar's parent/child links or a search hit. */
+  function jumpToSha(sha: string): void {
+    const node = nodeBySha.get(sha);
+    if (!node) return;
+    graphCanvas?.revealRow(node.row);
+    onSelectCommit(sha);
   }
 
   async function onSelectFile(file: FileChange): Promise<void> {
@@ -161,9 +227,11 @@
   </div>
 
   <div id="titlebar-right">
-    <!-- placeholder for future actions -->
+    <SearchBox bind:this={searchBox} nodes={graphData?.nodes ?? []} onJump={jumpToSha} />
   </div>
 </div>
+
+<svelte:window onkeydown={onWindowKeydown} />
 
 <!-- ── Main content area ──────────────────────────────────────────────────── -->
 <div id="main">
@@ -180,7 +248,7 @@
       </div>
 
       <div id="canvas-container">
-        <GraphCanvas {graphData} {onSelectCommit} {theme} />
+        <GraphCanvas bind:this={graphCanvas} {graphData} {onSelectCommit} {theme} {highlightRows} />
 
         {#if diffFile !== null}
           <div id="diff-overlay">
@@ -197,198 +265,25 @@
       </div>
     </div><!-- end #graph-pane -->
 
-  <!-- ── Right sidebar: commit detail ────────────────────────────────────── -->
-  <div id="sidebar">
-    <div class="sidebar-section-header">COMMIT</div>
-
-    {#if selectedNode}
-      {@const node = selectedNode}
-      <div class="detail-block">
-        <div class="detail-sha">{node.kind === 'working' ? 'Uncommitted changes' : node.sha}</div>
-
-        {#if node.refs.length > 0}
-          <div class="detail-refs">
-            {#each node.refs as ref}
-              <span class="ref-chip {ref.startsWith('🏷') ? 'tag' : ref.includes('/') ? 'remote' : 'local'}">
-                {ref}
-              </span>
-            {/each}
-          </div>
-        {/if}
-
-        <div class="detail-message">{node.message}</div>
-      </div>
-
-      <div class="sidebar-divider"></div>
-      <div class="sidebar-section-header">AUTHOR</div>
-      <div class="detail-block detail-author-row">
-        <div class="detail-author-avatar">
-          {node.author.charAt(0).toUpperCase()}
-          {#if showAvatars && node.authorAvatar}
-            <img
-              class="avatar-img"
-              src={node.authorAvatar}
-              alt=""
-              onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-            />
-          {/if}
-        </div>
-        <div class="detail-author-info">
-          <div class="detail-author-name">{node.author}</div>
-          <div class="detail-date">{node.authorDate}</div>
-        </div>
-      </div>
-
-      {#if node.kind !== 'working' && (node.committer !== node.author || node.date !== node.authorDate)}
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-section-header">COMMITTER</div>
-        <div class="detail-block detail-author-row">
-          <div class="detail-author-avatar">
-            {node.committer.charAt(0).toUpperCase()}
-            {#if showAvatars && node.committerAvatar}
-              <img
-                class="avatar-img"
-                src={node.committerAvatar}
-                alt=""
-                onerror={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
-              />
-            {/if}
-          </div>
-          <div class="detail-author-info">
-            <div class="detail-author-name">{node.committer}</div>
-            <div class="detail-date">{node.date}</div>
-          </div>
-        </div>
-      {/if}
-
-      <div class="sidebar-divider"></div>
-      <div class="sidebar-section-header">
-        <span>FILES CHANGED</span>
-        {#if changedFiles.length > 0}
-          <span class="file-count">{changedFiles.length}</span>
-        {/if}
-        <div class="view-toggle">
-          <button
-            class="view-toggle-btn {fileViewMode === 'flat' ? 'active' : ''}"
-            title="Flat view"
-            aria-label="Flat view"
-            onclick={() => (fileViewMode = 'flat')}
-          >
-            <svg viewBox="0 0 16 16" fill="currentColor">
-              <rect x="2" y="3"  width="12" height="1.6" rx="0.8" />
-              <rect x="2" y="7.2" width="12" height="1.6" rx="0.8" />
-              <rect x="2" y="11.4" width="12" height="1.6" rx="0.8" />
-            </svg>
-          </button>
-          <button
-            class="view-toggle-btn {fileViewMode === 'tree' ? 'active' : ''}"
-            title="Tree view"
-            aria-label="Tree view"
-            onclick={() => (fileViewMode = 'tree')}
-          >
-            <svg viewBox="0 0 16 16" fill="currentColor">
-              <rect x="2" y="3"  width="10" height="1.6" rx="0.8" />
-              <rect x="5" y="7.2" width="9" height="1.6" rx="0.8" />
-              <rect x="5" y="11.4" width="9" height="1.6" rx="0.8" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {#if changedFiles.length === 0}
-        <div class="files-loading">
-          <div class="spinner"></div>
-        </div>
-      {:else if fileViewMode === 'tree'}
-        <div class="file-list">
-          <FileTree nodes={fileTree} {diffFile} {onSelectFile} />
-        </div>
-      {:else}
-        <div class="file-list">
-          {#each changedFiles as file}
-            <div
-              class="file-row {diffFile === file.path ? 'selected' : ''}"
-              onclick={() => onSelectFile(file)}
-              role="button"
-              tabindex="0"
-              onkeydown={(e) => e.key === 'Enter' && onSelectFile(file)}
-            >
-              <span class="file-status {file.status.toLowerCase()}">{file.status[0]}</span>
-              <span class="file-path" title={file.path}>
-                {#if file.oldPath}
-                  <span class="file-old-path">{file.oldPath}</span>
-                  <span class="rename-arrow">→</span>
-                {/if}
-                {file.path}
-              </span>
-              {#if file.additions > 0 || file.deletions > 0}
-                <span class="file-stats">
-                  {#if file.additions > 0}<span class="stat-add">+{file.additions}</span>{/if}
-                  {#if file.deletions > 0}<span class="stat-del">-{file.deletions}</span>{/if}
-                </span>
-              {/if}
-            </div>
-          {/each}
-        </div>
-      {/if}
-    {:else}
-      <div class="sidebar-empty">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M3 12h3m12 0h3M12 3v3m0 12v3"/>
-        </svg>
-        <p>Select a commit to view details</p>
-      </div>
-    {/if}
-  </div><!-- end #sidebar -->
+    <CommitDetail
+      node={selectedNode}
+      {nodeBySha}
+      {showAvatars}
+      {changedFiles}
+      {diffFile}
+      {onSelectFile}
+      onJumpToSha={jumpToSha}
+    />
   </div><!-- end #top-pane -->
 </div><!-- end #main -->
 
-<!-- ── Status bar ──────────────────────────────────────────────────────────── -->
-<div id="statusbar">
-  <div class="status-left">
-    <span class="status-dot {status.startsWith('Error') ? 'error' : status === 'Ready — open a repository to start' ? 'idle' : 'active'}"></span>
-    <span id="status">{status}</span>
-  </div>
-  <div class="status-right">
-    <span class="status-hint">Scroll to navigate · Click to select</span>
-    <button
-      class="theme-toggle avatar-toggle"
-      class:on={showAvatars}
-      onclick={toggleAvatars}
-      title={showAvatars
-        ? 'Avatars on — loaded from gravatar.com. Click to stop.'
-        : 'Avatars off — click to load them from gravatar.com'}
-      aria-label="Toggle loading avatars from Gravatar"
-      aria-pressed={showAvatars}
-    >
-      <!-- person -->
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
-        <circle cx="8" cy="5" r="2.6" />
-        <path d="M2.8 13.6a5.3 5.3 0 0 1 10.4 0" stroke-linecap="round" />
-      </svg>
-    </button>
-    <button
-      class="theme-toggle"
-      onclick={toggleTheme}
-      title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      aria-label="Toggle color theme"
-    >
-      {#if theme === 'dark'}
-        <!-- sun -->
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
-          <circle cx="8" cy="8" r="3.2" />
-          <path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3 3l1.1 1.1M11.9 11.9L13 13M13 3l-1.1 1.1M4.1 11.9L3 13" stroke-linecap="round" />
-        </svg>
-      {:else}
-        <!-- moon -->
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path d="M6.2 1.8a6.2 6.2 0 108 8 5 5 0 01-8-8z" />
-        </svg>
-      {/if}
-    </button>
-  </div>
-</div>
+<StatusBar
+  {status}
+  {theme}
+  {showAvatars}
+  onToggleTheme={toggleTheme}
+  onToggleAvatars={toggleAvatars}
+/>
 
 <style>
   :global(*, *::before, *::after) {
@@ -542,7 +437,8 @@
 
   #titlebar-right {
     flex-shrink: 0;
-    width: 80px;
+    display: flex;
+    justify-content: flex-end;
   }
 
   .tb-btn {
@@ -689,184 +585,6 @@
     font-size: 12px;
   }
 
-  /* ── Right sidebar ───────────────────────────────────────────────────────── */
-  #sidebar {
-    width: 280px;
-    flex-shrink: 0;
-    background: var(--bg-chrome);
-    border-left: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .sidebar-section-header {
-    padding: 10px 14px 6px;
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--text-dimmer);
-    letter-spacing: 0.08em;
-    flex-shrink: 0;
-  }
-
-  .sidebar-divider {
-    height: 1px;
-    background: var(--border);
-    margin: 8px 0;
-    flex-shrink: 0;
-  }
-
-  .detail-block {
-    padding: 4px 14px 10px;
-    flex-shrink: 0;
-  }
-
-  .detail-sha {
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
-    font-size: 11px;
-    color: var(--blue);
-    word-break: break-all;
-    margin-bottom: 8px;
-    line-height: 1.5;
-  }
-
-  .detail-refs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 10px;
-  }
-
-  .ref-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 7px;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: 500;
-    line-height: 16px;
-    white-space: nowrap;
-  }
-
-  .ref-chip.local  { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-border); }
-  .ref-chip.remote { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
-  .ref-chip.tag    { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
-
-  .detail-message {
-    font-size: 13px;
-    color: var(--text);
-    line-height: 1.55;
-    word-break: break-word;
-  }
-
-  .detail-author-avatar {
-    position: relative;
-    overflow: hidden;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-bg-strong), var(--accent-border-strong));
-    color: var(--accent);
-    font-size: 15px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 8px;
-    flex-shrink: 0;
-  }
-
-  .detail-author-avatar .avatar-img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .detail-author-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .detail-author-name {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text);
-  }
-
-  .detail-date {
-    font-size: 11px;
-    color: var(--text-dim);
-    font-family: monospace;
-  }
-
-  .detail-author-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .sidebar-section-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .file-count {
-    background: var(--bg-elev);
-    color: var(--text-dim);
-    font-size: 9px;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 8px;
-    letter-spacing: 0;
-    line-height: 14px;
-  }
-
-  .view-toggle {
-    display: flex;
-    gap: 2px;
-    margin-left: auto;
-  }
-
-  .view-toggle-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 18px;
-    padding: 0;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    color: var(--text-dimmer);
-    cursor: pointer;
-  }
-
-  .view-toggle-btn svg {
-    width: 13px;
-    height: 13px;
-  }
-
-  .view-toggle-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-muted);
-  }
-
-  .view-toggle-btn.active {
-    background: var(--accent-bg);
-    border-color: var(--accent-border);
-    color: var(--accent);
-  }
-
-  .files-loading {
-    display: flex;
-    justify-content: center;
-    padding: 16px;
-  }
-
   .spinner {
     width: 16px;
     height: 16px;
@@ -878,181 +596,5 @@
 
   @keyframes spin {
     to { transform: rotate(360deg); }
-  }
-
-  .file-list {
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .file-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 14px;
-    font-size: 11px;
-    cursor: pointer;
-    min-width: 0;
-  }
-
-  .file-row:hover {
-    background: var(--bg-hover);
-  }
-
-  .file-row.selected {
-    background: var(--bg-sel);
-    border-left: 2px solid var(--accent);
-    padding-left: 12px;
-  }
-
-  .file-status {
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
-    font-size: 9px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    text-transform: uppercase;
-  }
-
-  .file-status.added    { background: var(--accent-bg); color: var(--accent); }
-  .file-status.modified { background: var(--blue-bg); color: var(--blue); }
-  .file-status.deleted  { background: var(--red-bg); color: var(--red); }
-  .file-status.renamed  { background: var(--amber-bg); color: var(--amber); }
-  .file-status.copied   { background: var(--teal-bg); color: var(--teal); }
-  .file-status.unknown  { background: var(--bg-elev); color: var(--text-dim); }
-
-  .file-path {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-2);
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
-    font-size: 10.5px;
-  }
-
-  .file-old-path {
-    color: var(--text-dim);
-    text-decoration: line-through;
-  }
-
-  .rename-arrow {
-    color: var(--text-dimmer);
-    margin: 0 2px;
-  }
-
-  .file-stats {
-    display: flex;
-    gap: 3px;
-    flex-shrink: 0;
-    font-family: monospace;
-    font-size: 10px;
-  }
-
-  .stat-add { color: var(--accent); }
-  .stat-del { color: var(--red); }
-
-  .sidebar-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    color: var(--text-faint);
-    padding: 40px 20px;
-    text-align: center;
-  }
-
-  .sidebar-empty svg {
-    width: 32px;
-    height: 32px;
-    color: var(--border);
-  }
-
-  .sidebar-empty p {
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--text-dimmer);
-  }
-
-  /* ── Status bar ──────────────────────────────────────────────────────────── */
-  #statusbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 22px;
-    padding: 0 10px;
-    background: var(--bg-chrome);
-    border-top: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .status-left {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .status-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .status-dot.idle   { background: var(--text-faint); }
-  .status-dot.active { background: var(--accent); }
-  .status-dot.error  { background: var(--error); }
-
-  #status {
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-
-  .status-hint {
-    font-size: 11px;
-    color: var(--text-faint);
-  }
-
-  .theme-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 16px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: 3px;
-    color: var(--text-dim);
-    cursor: pointer;
-  }
-
-  .theme-toggle svg {
-    width: 13px;
-    height: 13px;
-  }
-
-  .theme-toggle:hover {
-    background: var(--bg-hover);
-    color: var(--accent);
-  }
-
-  .avatar-toggle.on {
-    color: var(--accent);
   }
 </style>

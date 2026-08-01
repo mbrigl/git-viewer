@@ -175,7 +175,7 @@ check_relative_links() {
           || add_error "$rel: link '$target' has no matching anchor '#$frag' in ${target_file#"$ROOT"/}"
       fi
     done < <(grep -oE '\[[^]]*\]\([^)]+\)' "$md")
-  done < <(find "$ROOT" -type f -name '*.md' -not -path '*/.git/*' | sort)
+  done < <(find "$ROOT" -type f -name '*.md' -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/target/*' -not -path '*/dist/*' | sort)
 }
 
 # Section references point into AGENTS.md, whose sections are numbered '## N.' headings.
@@ -213,7 +213,7 @@ check_section_refs() {
         add_error "$rel:$lineno: reference '$match' matches no numbered section in AGENTS.md"
       fi
     done < <(grep -noE '§[0-9]+' "$f")
-  done < <(find "$ROOT" -type f \( -name '*.md' -o -name '*.yml' -o -name '*.yaml' -o -name '*.sh' \) -not -path '*/.git/*' | sort)
+  done < <(find "$ROOT" -type f \( -name '*.md' -o -name '*.yml' -o -name '*.yaml' -o -name '*.sh' \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/target/*' -not -path '*/dist/*' | sort)
 }
 
 # Every 'ADR-NNNN' reference (with digits — the literal 'ADR-NNNN' placeholder never matches)
@@ -234,7 +234,7 @@ check_adr_refs() {
         add_error "$rel:$lineno: reference '$match' matches no ADR file in docs/adr/"
       fi
     done < <(grep -noE 'ADR-[0-9]{4}' "$f")
-  done < <(find "$ROOT" -type f \( -name '*.md' -o -name '*.yml' -o -name '*.yaml' -o -name '*.sh' \) -not -path '*/.git/*' | sort)
+  done < <(find "$ROOT" -type f \( -name '*.md' -o -name '*.yml' -o -name '*.yaml' -o -name '*.sh' \) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/target/*' -not -path '*/dist/*' | sort)
 }
 
 check_adr_index

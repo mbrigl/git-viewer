@@ -1,6 +1,6 @@
 # ADR-0009: Commit limit of 3 000 per repository load
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-29
 - **Deciders:** Maintainer
 - **Note:** Transferred from the earlier Git Graph Viewer implementation (commit `fd64b3a`), where

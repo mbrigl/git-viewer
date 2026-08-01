@@ -1,6 +1,6 @@
 # ADR-0015: Svelte 5 as the frontend framework
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-29
 - **Deciders:** Maintainer
 - **Note:** Records a decision already embodied in the code — `src-web/*.svelte`, `svelte ^5` and

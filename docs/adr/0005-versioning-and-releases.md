@@ -1,6 +1,6 @@
 # ADR-0005: Versioning and release process
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-21
 - **Deciders:** Markus Brigl (maintainer)
 

@@ -1,6 +1,6 @@
 # ADR-0006: Commit graph layout after Pvigier — temporal topological sort and straight branches
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-29
 - **Deciders:** Maintainer
 - **Note:** Transferred from the earlier Git Graph Viewer implementation (commit `fd64b3a`), where

@@ -60,6 +60,16 @@ pub fn build_graph(commits: Vec<CommitData>) -> Graph {
             let author_date = format_commit_time(n.commit.author_time);
             let date = format_commit_time(n.commit.commit_time);
 
+            // Children sorted by row so the newest child comes first, keeping
+            // the order deterministic regardless of adjacency insertion order.
+            let mut children: Vec<(i32, String)> = n
+                .target_indices
+                .iter()
+                .map(|&c| (nodes[c].row, nodes[c].commit.sha.clone()))
+                .collect();
+            children.sort();
+            let children = children.into_iter().map(|(_, sha)| sha).collect();
+
             NodeJson {
                 row: n.row,
                 col: n.col,
@@ -74,6 +84,8 @@ pub fn build_graph(commits: Vec<CommitData>) -> Graph {
                 committer_avatar: gravatar_url(&n.commit.committer_email),
                 refs: n.commit.refs.clone(),
                 kind: n.commit.kind,
+                parents: n.commit.parent_shas.clone(),
+                children,
             }
         })
         .collect();
@@ -577,6 +589,40 @@ mod tests {
             1,
             "only the edge between loaded nodes survives"
         );
+    }
+
+    /// The detail contract: every node carries its parent SHAs in commit order —
+    /// including parents outside the loaded set — and the SHAs of its loaded
+    /// children, newest (lowest row) first.
+    #[test]
+    fn nodes_carry_parents_and_children() {
+        // M merges F into main; main is B ─ C, feature is F ─ C.
+        // C additionally records a parent that was not loaded.
+        let g = build_graph(vec![
+            commit("M", 500, &["B", "F"]),
+            commit("B", 400, &["C"]),
+            commit("F", 300, &["C"]),
+            commit("C", 100, &["missing"]),
+        ]);
+
+        let node = |sha: &str| g.nodes.iter().find(|n| n.sha == sha).expect(sha);
+
+        assert_eq!(
+            node("M").parents,
+            vec!["B", "F"],
+            "parents keep commit order, first parent first"
+        );
+        assert_eq!(
+            node("C").parents,
+            vec!["missing"],
+            "unloaded parents stay listed even though they get no edge"
+        );
+        assert!(node("M").children.is_empty());
+
+        let c_children = &node("C").children;
+        assert_eq!(c_children.len(), 2);
+        let rows: Vec<i32> = c_children.iter().map(|sha| row_of(&g, sha)).collect();
+        assert!(rows[0] < rows[1], "children are ordered newest first");
     }
 
     /// The working-directory node has no object id, so it must not show a short sha.

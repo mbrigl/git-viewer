@@ -14,6 +14,10 @@ export interface NodeJson {
   date: string;
   committerAvatar: string;
   refs: string[];
+  /** Parent SHAs in commit order (first parent first); may include SHAs outside the loaded set. */
+  parents: string[];
+  /** SHAs of loaded children, newest (lowest row) first. */
+  children: string[];
 }
 
 export interface Edge {
@@ -31,7 +35,18 @@ export interface GraphData {
   edges: Edge[];
 }
 
-export type FileStatus = 'Added' | 'Modified' | 'Deleted' | 'Renamed' | 'Copied' | 'Unknown';
+/** Serde serializes the Rust enum variants camelCase — the statuses arrive lowercase. */
+export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'unknown';
+
+/** Serde serializes the Rust enum variants camelCase — the kinds arrive lowercase. */
+export type DiffLineKind = 'add' | 'delete' | 'context' | 'hunk' | 'meta';
+
+export interface DiffLine {
+  kind: DiffLineKind;
+  content: string;
+  oldLineno: number | null;
+  newLineno: number | null;
+}
 
 export interface FileChange {
   path: string;

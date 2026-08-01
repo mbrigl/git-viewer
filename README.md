@@ -43,14 +43,18 @@ The full problem statement, the algorithms, and the project vocabulary live in
 | Feature                | Details                                                              |
 | ---------------------- | -------------------------------------------------------------------- |
 | **Straight branches**  | All commits of a branch line share one vertical column                |
-| **Merge lines**        | Orthogonal L-shaped lines for merge edges                             |
+| **Merge lines**        | Orthogonal L-shaped lines for merge edges; merge commits carry a double-circle marker |
 | **Branch/tag chips**   | Colored pill labels (green = local, blue = remote, amber = tag)       |
 | **Dark & light theme** | Switchable from the status bar; branch colors stay identical          |
 | **Stash & WIP rows**   | Stash entries and uncommitted changes appear as marked graph nodes     |
 | **Virtual rendering**  | Only visible rows are painted — smooth on large repositories          |
-| **Commit detail**      | Select a row to see full SHA, message, author, date, and committer     |
+| **Commit detail**      | Full SHA (click to copy), message, author, committer, and the commit's parents and children as clickable links |
+| **Search**             | `Ctrl`/`Cmd+F` — matches message, author, SHA, and refs; results panel, `Enter` cycles through hits |
+| **Lineage highlight**  | Selecting a commit keeps its ancestors and descendants in full colour and dims the rest |
+| **Keyboard navigation**| `↑`/`↓` walk the commit rows, `Esc` deselects                          |
+| **Avatars (opt-in)**   | Gravatar avatars in the detail panel — off by default, no network requests until enabled |
 | **Background loading** | History loads off the UI thread; the UI stays responsive              |
-| **Commit limit**       | Up to 3 000 commits per load                                          |
+| **Commit limit**       | Up to 3 000 commits per load; the status bar says when the limit cut the history |
 
 ### Implementation
 
@@ -124,13 +128,21 @@ CI runs exactly these commands on every pull request
 Start the application (`bun run tauri dev`, or the binary produced by `bun run tauri build`) and
 open a repository — either via the folder picker in the toolbar or by passing a path.
 
-The graph loads in the background, with progress shown in the status bar. Scroll through the
-history; branch and tag chips mark the commits the refs point at. Select any row to see the commit
-detail — SHA, message, author, date and committer — plus the files it changed, in a flat or tree
-view; selecting a file opens its diff over the graph.
+The graph loads in the background, with progress shown in the status bar — including a note when
+the commit limit truncated the history. Scroll through the history; branch and tag chips mark the
+commits the refs point at.
 
-> Specification Goal 6 additionally asks for a commit's **parents and children** in that detail
-> panel. That part is not implemented yet: the serialized node carries no parent or child field.
+Select any row — by click or with `↑`/`↓` — to see the commit detail: SHA (click it to copy),
+message, author, date and committer, the commit's parents and children as clickable links, plus
+the files it changed in a flat or tree view; selecting a file opens its diff over the graph.
+Selecting also highlights the commit's lineage — ancestors and descendants — in the graph; `Esc`
+deselects (closing the diff first if one is open).
+
+`Ctrl`/`Cmd+F` focuses the search field: matches run over message, author, committer, SHA, and ref
+names, a results panel lists them for click-to-jump, and `Enter`/`Shift+Enter` cycle through the
+hits. Avatars in the detail panel are loaded from Gravatar only after the toggle in the status bar
+is switched on — a fresh installation makes no network requests
+([ADR-0016](docs/adr/0016-local-only-no-egress-hardened-webview.md)).
 
 ## Roadmap
 
@@ -141,15 +153,14 @@ constrain the architecture gets an ADR before it is implemented.
    L-shape (starting points: Sugiyama-style layered layout, edge bundling).
 2. **Performance** — profile rendering on large repositories; optimise column assignment for very
    wide graphs.
-3. **Merge commit visualisation** — mark merge commits distinctly (e.g. diamond or double circle).
-4. **Interactive exploration** — search and filter by author, message, or date range; highlight a
-   commit's ancestry and descendants; filter by branch or tag.
-5. **Column width and zoom** — dynamic lane width, horizontal zoom and pan.
-6. **Better ref display** — tooltips or a separate ref legend instead of inline chips only.
-7. **Export** — save the visible graph as PNG or SVG.
-8. **Multiple repositories** — side-by-side comparison.
-9. **Theming** — configurable fonts and branch colors on top of the existing dark/light themes.
-10. **Commit statistics** — commits per author, density heatmap.
+3. **Interactive exploration** — filter the view by branch, tag, or date range (search and
+   lineage highlighting are done).
+4. **Column width and zoom** — dynamic lane width, horizontal zoom and pan.
+5. **Better ref display** — tooltips or a separate ref legend instead of inline chips only.
+6. **Export** — save the visible graph as PNG or SVG.
+7. **Multiple repositories** — side-by-side comparison.
+8. **Theming** — configurable fonts and branch colors on top of the existing dark/light themes.
+9. **Commit statistics** — commits per author, density heatmap.
 
 ## Project Layout
 

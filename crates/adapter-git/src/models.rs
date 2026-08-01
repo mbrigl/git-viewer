@@ -70,6 +70,8 @@ pub struct NodeJson {
     pub committer_avatar: String,
     pub refs: Vec<String>,
     pub kind: CommitKind,
+    pub parents: Vec<String>, // parent SHAs in commit order (first parent first); may include SHAs outside the loaded set
+    pub children: Vec<String>, // SHAs of loaded children, newest (lowest row) first
 }
 
 /// The complete laid-out graph: every node with its row and column, plus all edges.

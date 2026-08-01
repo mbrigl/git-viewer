@@ -1,6 +1,6 @@
 # ADR-0017: Bun as the JavaScript package manager and task runner
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-29
 - **Deciders:** Maintainer
 - **Note:** Records a decision already embodied in the tree — `bun run` in

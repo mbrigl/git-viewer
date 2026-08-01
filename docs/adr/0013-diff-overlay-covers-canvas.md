@@ -1,6 +1,6 @@
 # ADR-0013: Inspecting a commit's changes — diff over the canvas, flat and tree file list
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-29
 - **Deciders:** Maintainer
 - **Note:** Transferred from the earlier Git Graph Viewer implementation (commit `fd64b3a`), where

@@ -1,6 +1,6 @@
 # ADR-0010: Virtual rendering — paint only the visible rows
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-29
 - **Deciders:** Maintainer
 - **Note:** Transferred from the earlier Git Graph Viewer implementation (commit `fd64b3a`), where

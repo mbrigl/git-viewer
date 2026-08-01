@@ -1,6 +1,6 @@
 # ADR-0018: The git and layout core lives in a separate `adapter-git` crate
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-29
 - **Deciders:** Maintainer
 - **Note:** Records a decision already embodied in the tree — a Cargo workspace with `src-tauri` and

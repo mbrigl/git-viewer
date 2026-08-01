@@ -7,26 +7,39 @@ Update the **Unreleased** section in the same change as any user-visible modific
 
 ## [Unreleased]
 
-### Changed
-
-- The product is called **GitGraph** everywhere: the bundle identifier is `org.hivevm.gitgraph`, the
-  cargo package, binary and npm package are `gitgraph` (`gitgraph_lib` for the library, `gitgraph-web`
-  for the frontend workspace), and the window title and in-app name follow.
-- `README.md` now documents the Bun commands that actually build the project, the real chip colours,
-  both themes, and the `crates/adapter-git` layout; the CI badge points at this repository.
-- Lockfiles are committed as `AGENTS.md` §7 requires: the workspace-root `Cargo.lock` and `bun.lock`.
-  The stray `src-tauri/Cargo.lock` is gone — cargo ignores a member lockfile in a workspace, so it
-  pinned nothing.
-
-### Fixed
-
-- The column header (Graph, SHA, Description, Author, Date) now lines up with the rows below it.
-  It previously spanned the full window — including the right sidebar — with a hard-coded graph
-  column width; it now lives inside the graph pane and mirrors the canvas geometry, including the
-  lane area's dynamic width.
-
 ### Added
 
+- **Merge commits carry a double-circle marker** in the graph — an inner ring inside the node
+  glyph whenever a commit has more than one parent.
+- The diff viewer offers a **side-by-side view** next to the unified one, switchable in the diff
+  header and remembered across sessions. Deleted lines run on the left against added lines on the
+  right, paired within each change block; the longer side runs against empty cells, and context
+  lines appear on both sides.
+- Clicking the SHA in the commit detail **copies it to the clipboard**, with a brief "copied"
+  badge as feedback. The working-directory node has no object id and stays a plain label.
+- When a load stops at the commit limit, the status bar now says so — "3000 commits — commit
+  limit reached, older history not shown" — instead of presenting the cut-off as the whole
+  history (ADR-0009).
+- The search shows a **results panel** while the field is focused: each hit as a row with short
+  SHA, message, and author; click to jump, the current match highlighted and kept in view while
+  cycling with `Enter`. Rendering is capped at 200 rows with a "+N more" footer — the full set
+  stays reachable by cycling or refining the query.
+- **Keyboard navigation** in the graph: `↑`/`↓` walk the commit rows (starting at the newest when
+  nothing is selected), and `Escape` closes the diff overlay first, then deselects the commit —
+  which also lifts the ancestry dim. Shortcuts stay out of the way while typing in a text field.
+- A **search field** in the toolbar (focus with `Ctrl`/`Cmd+F`) filters history by message, author,
+  committer, SHA, or ref name — case-insensitive substring matching. `Enter` jumps to the next
+  match, `Shift+Enter` to the previous (wrapping around, with chevron buttons as alternative), the
+  field shows the match count and current position, and `Escape` clears it.
+- Selecting a commit now **highlights its lineage**: the selected commit, all its loaded
+  ancestors, all its descendants, and the edges between them keep full colour while every other
+  row and edge is dimmed. Reloading a repository clears the selection, since rows are reassigned
+  on every load.
+- The commit detail sidebar lists a commit's **parents and children** as clickable short SHAs that
+  select the target commit and scroll it into view, completing Specification success criterion 6.
+  Parents outside the loaded commit limit are shown but not clickable. The graph payload's node
+  objects carry two new fields for this: `parents` (SHAs in commit order) and `children` (loaded
+  children, newest first).
 - A test suite where there was none, covering what the specification requires to be testable without
   a repository window or a running UI: 13 Rust tests over row assignment, column assignment, edge
   building, determinism and the commit limit, and 8 frontend tests over the changed-files tree. Run
@@ -41,3 +54,29 @@ Update the **Unreleased** section in the same change as any user-visible modific
 - Initial template: agent governance (`AGENTS.md`, specification, ADRs), Dev Container without
   host Docker access, documentation and convention CI checks, git conventions, supply-chain
   pinning, and this changelog.
+
+### Changed
+
+- **Avatars are opt-in, default off** (ADR-0016): Gravatar images load only after the toggle in
+  the status bar is switched on, so a fresh installation makes no network requests at all; the
+  avatar hash uses SHA-256 (the ADR-gated `md5` crate is gone). The WebView is hardened to match:
+  a restrictive CSP whose only external origin is `img-src https://www.gravatar.com`, the asset
+  protocol disabled, and `withGlobalTauri` off.
+- The product is called **GitGraph** everywhere: the bundle identifier is `org.hivevm.gitgraph`, the
+  cargo package, binary and npm package are `gitgraph` (`gitgraph_lib` for the library, `gitgraph-web`
+  for the frontend workspace), and the window title and in-app name follow.
+- `README.md` now documents the Bun commands that actually build the project, the real chip colours,
+  both themes, and the `crates/adapter-git` layout; the CI badge points at this repository.
+- Lockfiles are committed as `AGENTS.md` §7 requires: the workspace-root `Cargo.lock` and `bun.lock`.
+  The stray `src-tauri/Cargo.lock` is gone — cargo ignores a member lockfile in a workspace, so it
+  pinned nothing.
+
+### Fixed
+
+- The diff viewer renders hunk headers and the `+`/`-` line signs again: the Rust enum serializes
+  its line kinds camelCase (`add`, `hunk`, …), but the viewer compared against capitalized names,
+  so those branches never matched.
+- The column header (Graph, SHA, Description, Author, Date) now lines up with the rows below it.
+  It previously spanned the full window — including the right sidebar — with a hard-coded graph
+  column width; it now lives inside the graph pane and mirrors the canvas geometry, including the
+  lane area's dynamic width.

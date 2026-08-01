@@ -1,6 +1,6 @@
 # ADR-0019: Stashes and uncommitted changes as synthetic nodes in the graph
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-29
 - **Deciders:** Maintainer
 - **Note:** Records a decision already embodied in the code — `CommitKind::{Stash, Working}`,

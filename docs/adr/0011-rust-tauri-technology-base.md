@@ -1,6 +1,6 @@
 # ADR-0011: Rust + Tauri as the implementation technology
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-29
 - **Deciders:** Maintainer
 - **Note:** Transferred from the earlier Git Graph Viewer implementation (commit `fd64b3a`), where

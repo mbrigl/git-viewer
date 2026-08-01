@@ -21,8 +21,15 @@
     graphData: GraphData | null;
     onSelectCommit?: (sha: string) => void;
     theme?: 'dark' | 'light';
+    /** Rows of the selected commit's ancestry; when set, all other rows are dimmed. */
+    highlightRows?: Set<number> | null;
   }
-  let { graphData, onSelectCommit, theme = 'dark' }: Props = $props();
+  let { graphData, onSelectCommit, theme = 'dark', highlightRows = null }: Props = $props();
+
+  // Dim levels while an ancestry highlight is active: edges and node glyphs
+  // fade strongly so the highlighted lines pop; text stays readable.
+  const DIM_GRAPH = 0.22;
+  const DIM_TEXT  = 0.45;
 
   // ── Layout constants ───────────────────────────────────────────────────────
   const ROW_HEIGHT  = 26;
@@ -161,7 +168,7 @@
   });
 
   $effect(() => {
-    const _ = [graphData, scrollY, hoveredRow, selectedRow, theme];
+    const _ = [graphData, scrollY, hoveredRow, selectedRow, theme, highlightRows];
     render();
   });
 
@@ -259,6 +266,14 @@
 
   // ── Edge rendering with short corner curves (GitKraken style) ────────────
   function drawEdge(edge: Edge): void {
+    // An edge is on the ancestry path iff both endpoints are: every loaded
+    // parent of an ancestry node is itself ancestry, so child→parent edges
+    // inside the set stay bright and everything else fades.
+    const dimmed =
+      highlightRows !== null &&
+      !(highlightRows.has(edge.sourceRow) && highlightRows.has(edge.targetRow));
+    if (dimmed) ctx!.globalAlpha = DIM_GRAPH;
+
     const x1 = nodeX(edge.sourceCol);
     const y1 = nodeY(edge.sourceRow) - scrollY;
     const x2 = nodeX(edge.targetCol);
@@ -292,6 +307,7 @@
       }
     }
     ctx!.stroke();
+    ctx!.globalAlpha = 1;
   }
 
   // ── Node rendering ─────────────────────────────────────────────────────────
@@ -300,6 +316,8 @@
     const cy = nodeY(node.row) - scrollY;
     const color = branchColor(node.col);
     const isSelected = node.row === selectedRow;
+    const dimmed = highlightRows !== null && !highlightRows.has(node.row);
+    if (dimmed) ctx!.globalAlpha = DIM_GRAPH;
 
     // Node outer glow for selected
     if (isSelected) {
@@ -346,8 +364,19 @@
       ctx!.strokeStyle = color;
       ctx!.lineWidth = isSelected ? 2 : 1.5;
       ctx!.stroke();
+
+      // Merge commits (more than one parent) get an inner ring — the
+      // "double circle" from the README roadmap.
+      if (node.parents.length > 1) {
+        ctx!.beginPath();
+        ctx!.arc(cx, cy, NODE_RADIUS - 2.5, 0, Math.PI * 2);
+        ctx!.strokeStyle = isSelected ? pal.nodeFill : color;
+        ctx!.lineWidth = 1;
+        ctx!.stroke();
+      }
     }
     ctx!.lineWidth = LINE_WIDTH;
+    if (dimmed) ctx!.globalAlpha = DIM_TEXT;
 
     const baseY  = node.row * ROW_HEIGHT - scrollY;
     const textY  = baseY + Math.round((ROW_HEIGHT + 11) / 2) - 1;
@@ -382,6 +411,7 @@
     // Date
     ctx!.fillStyle = pal.date;
     ctx!.fillText(node.date, x, textY);
+    ctx!.globalAlpha = 1;
   }
 
   // ── Ref chip rendering ─────────────────────────────────────────────────────
@@ -462,6 +492,24 @@
   function onWheel(e: WheelEvent): void {
     e.preventDefault();
     scrollY += e.deltaY;
+  }
+
+  /// Clears the row selection (Escape in App.svelte); the ancestry dim is
+  /// driven by the selection in App.svelte and lifts with it.
+  export function clearSelection(): void {
+    selectedRow = -1;
+  }
+
+  /// Selects a row from outside (e.g. the detail sidebar's parent/child links)
+  /// and scrolls it into view when it is off-screen. render() clamps scrollY.
+  export function revealRow(row: number): void {
+    if (row < 0 || row >= index.rowCount) return;
+    selectedRow = row;
+    const H = canvas?.height ?? 0;
+    const top = row * ROW_HEIGHT;
+    if (top < scrollY || top + ROW_HEIGHT > scrollY + H) {
+      scrollY = top - H / 2 + ROW_HEIGHT / 2;
+    }
   }
 </script>
 

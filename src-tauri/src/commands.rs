@@ -44,7 +44,17 @@ pub async fn open_repo(
             Ok(graph_json) => {
                 let node_count = count_nodes_from_json(&graph_json);
                 let _ = window_clone.emit("load-graph", graph_json);
-                let _ = window_clone.emit("set-status", format!("{} commits", node_count));
+                // At the commit limit the load was (or may have been) truncated —
+                // say so instead of presenting the cut-off as the whole history.
+                let status = if node_count >= git::MAX_COMMITS {
+                    format!(
+                        "{} commits — commit limit reached, older history not shown",
+                        node_count
+                    )
+                } else {
+                    format!("{} commits", node_count)
+                };
+                let _ = window_clone.emit("set-status", status);
             }
             Err(e) => {
                 let _ = window_clone.emit("set-status", format!("Error: {}", e));

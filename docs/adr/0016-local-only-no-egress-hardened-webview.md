@@ -1,6 +1,6 @@
 # ADR-0016: Local-by-default frontend — avatars opt-in, hardened WebView surface
 
-- **Status:** 🟡 proposed
+- **Status:** 🟢 accepted
 - **Date:** 2026-07-31
 - **Deciders:** Maintainer
 - **Note:** This ADR *changes* current behaviour rather than recording it. The code today fetches
