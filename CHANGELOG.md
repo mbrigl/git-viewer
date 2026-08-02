@@ -9,6 +9,15 @@ Update the **Unreleased** section in the same change as any user-visible modific
 
 ### Added
 
+- A **repository sidebar** on the left (ADR-0021) listing what a repository contains rather than
+  only what the visible commits carry: local branches with their ahead/behind counts and the
+  checked-out one marked, remote branches grouped per remote, working trees (the main one included),
+  and tags. Names with slashes are grouped into folders, a filter field narrows every section at
+  once, and selecting an entry reveals and selects the commit it points at. Refs pointing outside
+  the loaded history are shown but inert, since there is no row to reveal. The sidebar reads and
+  navigates only — it does not check out, fetch, or write anything. It minimises to a narrow rail
+  of section icons that gives the width back to the graph; clicking an icon expands it again on
+  that section, and the choice is remembered across sessions.
 - A **release pipeline** (ADR-0020): pushing a `v*` tag builds installers for Windows (`.msi`,
   NSIS `.exe`), macOS (`.dmg` for Apple Silicon and Intel), and Linux (`.deb`, `.rpm`, AppImage)
   plus one distribution-independent **Flatpak bundle**, and attaches them all to a draft GitHub

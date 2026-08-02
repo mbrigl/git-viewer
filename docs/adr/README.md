@@ -49,6 +49,7 @@ in the repository root). ADRs derive from the specification in [`docs/SPECIFICAT
 | [0018](0018-adapter-git-as-separate-crate.md) | The git and layout core lives in a separate `adapter-git` crate | 🟢 accepted |
 | [0019](0019-synthetic-stash-and-workdir-nodes.md) | Stashes and uncommitted changes as synthetic nodes | 🟢 accepted |
 | [0020](0020-tag-triggered-release-pipeline.md) | Tag-triggered release pipeline with installers and a Flatpak bundle | 🟡 proposed |
+| [0021](0021-repository-sidebar-ref-tree.md) | Repository sidebar — a navigable tree of branches, remotes, worktrees, and tags | 🟡 proposed |
 
 **Consolidation history.** While every ADR involved was still `proposed`, and while nothing outside
 this directory referenced their numbers, three pairs were consolidated and the set was then renumbered

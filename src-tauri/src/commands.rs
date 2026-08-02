@@ -1,4 +1,4 @@
-use adapter_git::{self, git, graph};
+use adapter_git::{self, git, graph, refs};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, State, Window};
@@ -41,9 +41,12 @@ pub async fn open_repo(
         });
 
         match load_and_layout(path, tx).await {
-            Ok(graph_json) => {
+            Ok((graph_json, refs_json)) => {
                 let node_count = count_nodes_from_json(&graph_json);
                 let _ = window_clone.emit("load-graph", graph_json);
+                // The sidebar's refs come from the same read as the history, so
+                // the two never describe different states of the repository.
+                let _ = window_clone.emit("load-refs", refs_json);
                 // At the commit limit the load was (or may have been) truncated —
                 // say so instead of presenting the cut-off as the whole history.
                 let status = if node_count >= git::MAX_COMMITS {
@@ -138,20 +141,26 @@ pub async fn get_file_diff(
     serde_json::to_string(&lines).map_err(|e| e.to_string())
 }
 
-/// Loads a repository and builds the graph layout.
+/// Loads a repository, builds the graph layout, and reads the refs the sidebar
+/// lists (ADR-0021). Returns both as JSON: the graph and the refs describe one
+/// and the same read of the repository.
 /// Runs git2 operations on a blocking thread pool.
 async fn load_and_layout(
     path: PathBuf,
     progress_tx: tokio::sync::mpsc::Sender<String>,
-) -> Result<String, anyhow::Error> {
+) -> Result<(String, String), anyhow::Error> {
     // git2 is not async-safe so run on blocking thread pool
+    let refs_path = path.clone();
     let commits =
         tokio::task::spawn_blocking(move || git::load_repository(&path, Some(progress_tx)))
             .await??;
 
+    let repo_refs = tokio::task::spawn_blocking(move || refs::load_repo_refs(&refs_path)).await??;
+
     let graph = graph::build_graph(commits);
-    let json = serde_json::to_string(&graph)?;
-    Ok(json)
+    let graph_json = serde_json::to_string(&graph)?;
+    let refs_json = serde_json::to_string(&repo_refs)?;
+    Ok((graph_json, refs_json))
 }
 
 /// Counts nodes in a serialized JSON graph (for status message).

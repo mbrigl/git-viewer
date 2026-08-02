@@ -6,9 +6,10 @@
   import DiffViewer from './DiffViewer.svelte';
   import SearchBox from './SearchBox.svelte';
   import CommitDetail from './CommitDetail.svelte';
+  import RepoSidebar from './RepoSidebar.svelte';
   import StatusBar, { READY_STATUS } from './StatusBar.svelte';
   import { lineageRows } from './ancestry.ts';
-  import type { GraphData, NodeJson, FileChange, DiffLine } from './types.ts';
+  import type { GraphData, NodeJson, FileChange, DiffLine, RepoRefs } from './types.ts';
 
   // ── Theme ────────────────────────────────────────────────────────────────
   type Theme = 'dark' | 'light';
@@ -38,6 +39,7 @@
 
   // ── State ──────────────────────────────────────────────────────────────────
   let graphData       = $state<GraphData | null>(null);
+  let repoRefs        = $state<RepoRefs | null>(null);
   let status          = $state(READY_STATUS);
   let repoLabel       = $state('(no repository)');
   let currentRepoPath = $state<string | null>(null);
@@ -123,6 +125,15 @@
           changedFiles = [];
         } catch {
           status = 'Error parsing graph data';
+        }
+      }),
+      // Refs come from the same repository read as the graph (ADR-0021), so the
+      // sidebar never describes a different state than the commits on screen.
+      listen<string>('load-refs', (e) => {
+        try {
+          repoRefs = typeof e.payload === 'string' ? JSON.parse(e.payload) : e.payload;
+        } catch {
+          repoRefs = null;
         }
       }),
       listen<string>('set-status',     (e) => { status = e.payload; }),
@@ -236,6 +247,8 @@
 <!-- ── Main content area ──────────────────────────────────────────────────── -->
 <div id="main">
   <div id="top-pane">
+    <RepoSidebar {repoRefs} loadedShas={new Set(nodeBySha.keys())} onJump={jumpToSha} />
+
     <div id="graph-pane">
       <!-- Column header — inside the graph pane so it shares the canvas width,
            with the graph column tracking the canvas's dynamic lane width. -->

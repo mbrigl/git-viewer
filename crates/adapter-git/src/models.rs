@@ -81,6 +81,80 @@ pub struct Graph {
     pub edges: Vec<Edge>,
 }
 
+// ── Repository sidebar (ADR-0021) ───────────────────────────────────────────
+// What the sidebar lists, read in the same pass as the history. These are refs
+// and checkout locations — repository state, not history — so none of them is a
+// node in the commit graph; each only points at the commit it resolves to.
+
+/// A local branch and where it stands relative to its configured upstream.
+/// `ahead`/`behind` are computed from refs already on disk and are therefore as
+/// current as the last fetch — the viewer never fetches (specification Non-Goals).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalBranch {
+    pub name: String,
+    pub sha: String,
+    pub short_sha: String,
+    /// True for the branch `HEAD` currently points at.
+    pub is_head: bool,
+    /// The upstream's full name (e.g. `origin/main`), when one is configured.
+    pub upstream: Option<String>,
+    pub ahead: usize,
+    pub behind: usize,
+}
+
+/// A remote-tracking branch, named without its remote prefix (`feature/x`, not
+/// `origin/feature/x`) because the remote it belongs to already groups it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteBranch {
+    pub name: String,
+    pub sha: String,
+    pub short_sha: String,
+}
+
+/// A configured remote together with its tracking branches.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Remote {
+    pub name: String,
+    pub branches: Vec<RemoteBranch>,
+}
+
+/// A working tree: the main one, plus every linked worktree.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Worktree {
+    pub name: String,
+    pub path: String,
+    /// The checked-out branch, absent when the worktree has a detached `HEAD`.
+    pub branch: Option<String>,
+    pub sha: String,
+    pub short_sha: String,
+    /// True for the repository's main working tree, which `git2` does not
+    /// report as a worktree of its own.
+    pub is_main: bool,
+}
+
+/// A tag, peeled so an annotated tag resolves to the commit it marks.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Tag {
+    pub name: String,
+    pub sha: String,
+    pub short_sha: String,
+}
+
+/// Everything the repository sidebar lists for one repository read.
+#[derive(Debug, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoRefs {
+    pub locals: Vec<LocalBranch>,
+    pub remotes: Vec<Remote>,
+    pub worktrees: Vec<Worktree>,
+    pub tags: Vec<Tag>,
+}
+
 #[derive(Debug, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum FileStatus {
