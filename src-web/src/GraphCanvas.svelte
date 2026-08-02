@@ -1,8 +1,11 @@
 <script module lang="ts">
-  // Graph-lane geometry, exported so the column header in App.svelte can
-  // mirror the canvas layout exactly instead of guessing widths.
+  // Row geometry, exported so the column header in App.svelte can mirror the
+  // canvas layout exactly instead of guessing widths.
   const COL_WIDTH  = 20;
   const GRAPH_LEFT = 10;
+
+  /** Width of the branch/tag column, which precedes the graph lanes. */
+  export const REFS_WIDTH = 190;
 
   /** Lane-area width shown while no repository is loaded. */
   export const EMPTY_GRAPH_WIDTH = 180;
@@ -36,10 +39,7 @@
   const NODE_RADIUS = 5;
   const LINE_WIDTH  = 1.5;
 
-  const W_SHA    = 80;
-  const W_REFS   = 190;
-  const W_AUTHOR = 160;
-  const W_DATE   = 130;
+  const W_SHA = 80;
 
   // GitKraken-style branch colors
   const BRANCH_COLORS = [
@@ -66,8 +66,7 @@
     rowSel: string; accent: string; rowHover: string; rowSep: string;
     separator: string; nodeFill: string;
     shaSel: string; sha: string; msgSel: string; msg: string;
-    author: string; date: string;
-    chipTag: Chip; chipRemote: Chip; chipLocal: Chip;
+    chipTag: Chip; chipRemote: Chip; chipLocal: Chip; chipMore: Chip;
   }
   const PALETTES: Record<'dark' | 'light', Palette> = {
     dark: {
@@ -75,20 +74,20 @@
       rowSel: '#1e2a3a', accent: '#4caf7d', rowHover: '#1e2128', rowSep: '#1e2128',
       separator: '#2a2d35', nodeFill: '#1a1d23',
       shaSel: '#6b9fff', sha: '#4a5070', msgSel: '#e8eaf0', msg: '#c0c3ca',
-      author: '#5a5e6e', date: '#4a4e5e',
       chipTag:    { bg: '#2e2412', text: '#e8a94a', border: '#4a3a1a' },
       chipRemote: { bg: '#162338', text: '#6b9fff', border: '#1f3a5a' },
       chipLocal:  { bg: '#1a3a22', text: '#4caf7d', border: '#2a5a34' },
+      chipMore:   { bg: '#23262e', text: '#8a8f9e', border: '#343845' },
     },
     light: {
       bg: '#ffffff', emptyTitle: '#b3b9c4', emptySub: '#cbd0d8',
       rowSel: '#e3edff', accent: '#2e9e63', rowHover: '#eceef2', rowSep: '#eef0f3',
       separator: '#d8dbe0', nodeFill: '#ffffff',
       shaSel: '#2d6fdb', sha: '#969cab', msgSel: '#14171c', msg: '#3a3f4a',
-      author: '#767c8a', date: '#969cab',
       chipTag:    { bg: '#fbf0d8', text: '#b5791f', border: '#ecd6a6' },
       chipRemote: { bg: '#e4edfb', text: '#2d6fdb', border: '#bcd4f5' },
       chipLocal:  { bg: '#e3f6ea', text: '#2e9e63', border: '#b7e4c8' },
+      chipMore:   { bg: '#eef0f3', text: '#6b7180', border: '#d3d7de' },
     },
   };
   const pal: Palette = $derived(PALETTES[theme]);
@@ -103,7 +102,8 @@
   let ctx: CanvasRenderingContext2D | null = $derived(canvas?.getContext('2d') ?? null);
 
   // ── Layout helpers ─────────────────────────────────────────────────────────
-  function nodeX(col: number): number { return GRAPH_LEFT + col * COL_WIDTH + COL_WIDTH / 2; }
+  // Lane 0 starts after the branch/tag column, so the whole graph is offset by it.
+  function nodeX(col: number): number { return REFS_WIDTH + GRAPH_LEFT + col * COL_WIDTH + COL_WIDTH / 2; }
   function nodeY(row: number): number { return row * ROW_HEIGHT + ROW_HEIGHT / 2; }
 
   // ── Row index, rebuilt only when the graph changes ─────────────────────────
@@ -207,7 +207,8 @@
 
     const visRowMin = Math.max(0, Math.floor(scrollY / ROW_HEIGHT));
     const visRowMax = Math.min(index.rowCount - 1, Math.ceil((scrollY + H) / ROW_HEIGHT));
-    const gw = index.width;
+    // Columns: [branch/tag][graph lanes][sha, message]
+    const infoX = REFS_WIDTH + index.width;
 
     // Row backgrounds
     for (let r = visRowMin; r <= visRowMax; r++) {
@@ -231,12 +232,14 @@
       ctx.stroke();
     }
 
-    // Graph/info separator
+    // Column separators: refs/graph and graph/info
     ctx.strokeStyle = pal.separator;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(gw, 0);
-    ctx.lineTo(gw, H);
+    ctx.moveTo(REFS_WIDTH, 0);
+    ctx.lineTo(REFS_WIDTH, H);
+    ctx.moveTo(infoX, 0);
+    ctx.lineTo(infoX, H);
     ctx.stroke();
 
     // Edges — orthogonal L-shapes with a short curve at the corner.
@@ -260,7 +263,7 @@
     // Nodes — one row lookup per visible row, already in row order
     for (let r = visRowMin; r <= visRowMax; r++) {
       const node = index.nodesByRow[r];
-      if (node) drawNode(node, gw, W);
+      if (node) drawNode(node, infoX, W);
     }
   }
 
@@ -311,13 +314,25 @@
   }
 
   // ── Node rendering ─────────────────────────────────────────────────────────
-  function drawNode(node: NodeJson, gw: number, canvasW: number): void {
+  function drawNode(node: NodeJson, infoX: number, canvasW: number): void {
     const cx = nodeX(node.col);
     const cy = nodeY(node.row) - scrollY;
     const color = branchColor(node.col);
     const isSelected = node.row === selectedRow;
     const dimmed = highlightRows !== null && !highlightRows.has(node.row);
     if (dimmed) ctx!.globalAlpha = DIM_GRAPH;
+
+    // A glyph's fill is the canvas background: it punches a hole in the edge
+    // running behind the node, which is what keeps the line from crossing the
+    // circle. Dimming that hole along with everything else would make the edge
+    // show through the glyph, so the fill always goes down opaque and only the
+    // outline fades. A selected node is never dimmed, so its coloured fill is
+    // unaffected either way.
+    const fillGlyph = (): void => {
+      ctx!.globalAlpha = 1;
+      ctx!.fill();
+      if (dimmed) ctx!.globalAlpha = DIM_GRAPH;
+    };
 
     // Node outer glow for selected
     if (isSelected) {
@@ -337,7 +352,7 @@
       ctx!.lineTo(cx - r, cy);
       ctx!.closePath();
       ctx!.fillStyle = isSelected ? color : pal.nodeFill;
-      ctx!.fill();
+      fillGlyph();
       ctx!.strokeStyle = color;
       ctx!.lineWidth = isSelected ? 2 : 1.5;
       ctx!.stroke();
@@ -345,7 +360,7 @@
       ctx!.beginPath();
       ctx!.arc(cx, cy, NODE_RADIUS, 0, Math.PI * 2);
       ctx!.fillStyle = pal.nodeFill;
-      ctx!.fill();
+      fillGlyph();
       ctx!.setLineDash([2, 2]);
       ctx!.strokeStyle = color;
       ctx!.lineWidth = isSelected ? 2 : 1.5;
@@ -356,7 +371,7 @@
       ctx!.beginPath();
       ctx!.arc(cx, cy, NODE_RADIUS, 0, Math.PI * 2);
       ctx!.fillStyle = isSelected ? color : pal.nodeFill;
-      ctx!.fill();
+      fillGlyph();
 
       // Node border
       ctx!.beginPath();
@@ -380,7 +395,11 @@
 
     const baseY  = node.row * ROW_HEIGHT - scrollY;
     const textY  = baseY + Math.round((ROW_HEIGHT + 11) / 2) - 1;
-    let x = gw + 8;
+
+    // Branch/tag chips — their own column, left of the graph lanes.
+    drawRefChips(node.refs, baseY);
+
+    let x = infoX + 8;
 
     // SHA
     ctx!.font = '11px "Cascadia Code", "Fira Code", "JetBrains Mono", monospace';
@@ -388,63 +407,111 @@
     ctx!.fillText(node.shortSha, x, textY);
     x += W_SHA;
 
-    // Refs
-    x = drawRefChips(node.refs, x, baseY);
-
-    // Dynamic message width: fills space between refs and author
-    const msgEnd = canvasW - W_AUTHOR - W_DATE - 8;
-    const msgW   = Math.max(60, msgEnd - x);
+    // Message — takes every pixel left of the canvas edge. Author and date live
+    // in the commit detail sidebar, not in the row.
+    const msgW = Math.max(60, canvasW - 8 - x);
 
     ctx!.font = isSelected
       ? '500 12px "Segoe UI", system-ui, sans-serif'
       : '12px "Segoe UI", system-ui, sans-serif';
     ctx!.fillStyle = isSelected ? pal.msgSel : pal.msg;
-    ctx!.fillText(truncateText(node.message, msgW - 8), x, textY);
-    x = msgEnd;
-
-    // Author
-    ctx!.font = '11px "Segoe UI", system-ui, sans-serif';
-    ctx!.fillStyle = pal.author;
-    ctx!.fillText(truncateText(node.author, W_AUTHOR - 8), x, textY);
-    x += W_AUTHOR;
-
-    // Date
-    ctx!.fillStyle = pal.date;
-    ctx!.fillText(node.date, x, textY);
+    ctx!.fillText(truncateText(node.message, msgW), x, textY);
     ctx!.globalAlpha = 1;
   }
 
   // ── Ref chip rendering ─────────────────────────────────────────────────────
-  function drawRefChips(refs: string[], startX: number, rowY: number): number {
-    if (!refs || refs.length === 0) return startX;
-    let x = startX;
-    const chipH = 15;
-    const chipY = rowY + (ROW_HEIGHT - chipH) / 2;
-    const arc = 3;
+  const CHIP_H   = 15;
+  const CHIP_PAD = 6;  // horizontal padding inside a chip, per side
+  const CHIP_GAP = 4;  // space between two chips
 
-    ctx!.font = '10px "Segoe UI", system-ui, sans-serif';
+  /// Widths of a chip's text and of the chip around it.
+  function chipWidth(label: string): number {
+    return ctx!.measureText(label).width + 2 * CHIP_PAD;
+  }
+
+  /// Decides which of a row's chips fit into the refs column. Chips are kept in
+  /// order and the ones that do not fit collapse into a single `+N` badge, so a
+  /// commit with many refs still shows that they exist. The result is laid out
+  /// flush against the graph lanes — a chip always sits directly left of its
+  /// commit, however many refs the row carries.
+  function planRefChips(refs: string[]): { label: string; width: number; more: boolean }[] {
+    const avail = REFS_WIDTH - 16;
+    const plan: { label: string; width: number; more: boolean }[] = [];
+    let used = 0;
+
     for (const ref of refs) {
-      if (x > startX + W_REFS - 10) break;
-      const isTag    = ref.startsWith('🏷');
-      const isRemote = ref.includes('/');
+      const w = chipWidth(ref);
+      const gap = plan.length === 0 ? 0 : CHIP_GAP;
+      if (used + gap + w > avail) break;
+      plan.push({ label: ref, width: w, more: false });
+      used += gap + w;
+    }
 
-      const chip = isTag ? pal.chipTag : isRemote ? pal.chipRemote : pal.chipLocal;
-      const chipBg = chip.bg, textColor = chip.text, borderColor = chip.border;
+    if (plan.length === 0) {
+      // A single ref wider than the whole column: truncate it, reserving room
+      // for the badge that the remaining refs collapse into.
+      const rest  = refs.length - 1;
+      const badge = rest > 0 ? chipWidth(`+${rest}`) + CHIP_GAP : 0;
+      const room  = avail - badge - 2 * CHIP_PAD;
+      if (room >= 12) {
+        const label = truncateText(refs[0], room);
+        plan.push({ label, width: chipWidth(label), more: false });
+        used = chipWidth(label);
+      }
+    }
 
-      const chipW = ctx!.measureText(ref).width + 12;
-      ctx!.fillStyle = chipBg;
-      roundRect(x, chipY, chipW, chipH, arc);
+    let hidden = refs.length - plan.length;
+    if (hidden === 0) return plan;
+
+    // Make room for the badge by dropping trailing chips until it fits. Its
+    // label grows as chips are dropped, so the width is re-measured each round.
+    for (;;) {
+      const badge = chipWidth(`+${hidden}`);
+      if (used + (plan.length === 0 ? 0 : CHIP_GAP) + badge <= avail) {
+        plan.push({ label: `+${hidden}`, width: badge, more: true });
+        return plan;
+      }
+      if (plan.length === 0) {
+        // Not even a badge fits — nothing readable can be drawn.
+        return [];
+      }
+      const dropped = plan.pop()!;
+      used -= dropped.width + (plan.length === 0 ? 0 : CHIP_GAP);
+      hidden++;
+    }
+  }
+
+  /// Draws a row's branch/tag chips into the refs column, right-aligned so they
+  /// end where the graph lanes begin.
+  function drawRefChips(refs: string[], rowY: number): void {
+    if (!refs || refs.length === 0) return;
+    ctx!.font = '10px "Segoe UI", system-ui, sans-serif';
+
+    const plan = planRefChips(refs);
+    if (plan.length === 0) return;
+
+    const total = plan.reduce((sum, c) => sum + c.width, 0) + (plan.length - 1) * CHIP_GAP;
+    const chipY = rowY + (ROW_HEIGHT - CHIP_H) / 2;
+    const arc = 3;
+    let x = REFS_WIDTH - 8 - total;
+
+    for (const { label, width, more } of plan) {
+      const isTag    = label.startsWith('🏷');
+      const isRemote = label.includes('/');
+      const chip = more ? pal.chipMore : isTag ? pal.chipTag : isRemote ? pal.chipRemote : pal.chipLocal;
+
+      ctx!.fillStyle = chip.bg;
+      roundRect(x, chipY, width, CHIP_H, arc);
       ctx!.fill();
-      ctx!.strokeStyle = borderColor;
+      ctx!.strokeStyle = chip.border;
       ctx!.lineWidth = 0.75;
-      roundRect(x, chipY, chipW, chipH, arc);
+      roundRect(x, chipY, width, CHIP_H, arc);
       ctx!.stroke();
       ctx!.lineWidth = LINE_WIDTH;
-      ctx!.fillStyle = textColor;
-      ctx!.fillText(ref, x + 6, chipY + chipH - 3.5);
-      x += chipW + 4;
+      ctx!.fillStyle = chip.text;
+      ctx!.fillText(label, x + CHIP_PAD, chipY + CHIP_H - 3.5);
+      x += width + CHIP_GAP;
     }
-    return Math.max(x, startX + W_REFS);
   }
 
   function roundRect(x: number, y: number, w: number, h: number, r: number): void {

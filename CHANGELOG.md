@@ -61,6 +61,14 @@ Update the **Unreleased** section in the same change as any user-visible modific
 
 ### Changed
 
+- Branch and tag badges moved out of the description into a **"Branch / Tag" column of their own**,
+  to the left of the graph, so a commit's refs no longer eat into the space its message gets. The
+  badges sit flush against the lanes, so one is always directly left of the commit it marks, and
+  refs that do not fit collapse into a `+N` badge instead of vanishing. A single badge wider than
+  the column is truncated instead of bleeding into the graph lanes.
+- The graph rows **drop the Author and Date columns**: branch/tag, graph, SHA and description are
+  what a row needs, and the description takes the freed width. Author, committer and date are
+  unchanged in the commit detail panel.
 - **Avatars are opt-in, default off** (ADR-0016): Gravatar images load only after the toggle in
   the status bar is switched on, so a fresh installation makes no network requests at all; the
   avatar hash uses SHA-256 (the ADR-gated `md5` crate is gone). The WebView is hardened to match:
@@ -80,7 +88,7 @@ Update the **Unreleased** section in the same change as any user-visible modific
 - The diff viewer renders hunk headers and the `+`/`-` line signs again: the Rust enum serializes
   its line kinds camelCase (`add`, `hunk`, …), but the viewer compared against capitalized names,
   so those branches never matched.
-- The column header (Graph, SHA, Description, Author, Date) now lines up with the rows below it.
+- The column header now lines up with the rows below it.
   It previously spanned the full window — including the right sidebar — with a hard-coded graph
   column width; it now lives inside the graph pane and mirrors the canvas geometry, including the
   lane area's dynamic width.

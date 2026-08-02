@@ -2,7 +2,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { onMount } from 'svelte';
-  import GraphCanvas, { EMPTY_GRAPH_WIDTH, graphAreaWidth } from './GraphCanvas.svelte';
+  import GraphCanvas, { EMPTY_GRAPH_WIDTH, REFS_WIDTH, graphAreaWidth } from './GraphCanvas.svelte';
   import DiffViewer from './DiffViewer.svelte';
   import SearchBox from './SearchBox.svelte';
   import CommitDetail from './CommitDetail.svelte';
@@ -240,11 +240,10 @@
       <!-- Column header — inside the graph pane so it shares the canvas width,
            with the graph column tracking the canvas's dynamic lane width. -->
       <div id="col-header">
+        <span class="col-refs" style="width: {REFS_WIDTH}px">Branch / Tag</span>
         <span class="col-graph" style="width: {graphColWidth + 8}px">Graph</span>
         <span class="col-sha">SHA</span>
         <span class="col-desc">Description</span>
-        <span class="col-author">Author</span>
-        <span class="col-date">Date</span>
       </div>
 
       <div id="canvas-container">
@@ -525,15 +524,16 @@
     flex-shrink: 0;
   }
 
-  /* Column starts mirror the canvas text layout in GraphCanvas.svelte:
-     sha at lane-width + 8, refs/message filling the middle, author at
-     width − 298, date at width − 138 (all border-box). The graph column's
-     width is set inline because the lane area grows with the graph. */
-  .col-graph  { flex-shrink: 0; padding-left: 8px; }
-  .col-sha    { width: 80px;  flex-shrink: 0; font-family: monospace; }
-  .col-desc   { flex: 1;      min-width: 0; }
-  .col-author { width: 160px; flex-shrink: 0; }
-  .col-date   { width: 138px; flex-shrink: 0; padding-right: 8px; }
+  /* Column starts mirror the canvas layout in GraphCanvas.svelte: branch/tag
+     chips first, then the graph lanes, then sha at refs-width + lane-width + 8,
+     with the description taking the rest of the row. Both leading columns take
+     their width inline — the refs column from the shared constant, the graph
+     column because its lane area grows with the graph. The refs header is
+     right-aligned because the chips below it hug the graph lanes. */
+  .col-refs  { flex-shrink: 0; padding-right: 8px; text-align: right; }
+  .col-graph { flex-shrink: 0; padding-left: 8px; }
+  .col-sha   { width: 80px; flex-shrink: 0; font-family: monospace; }
+  .col-desc  { flex: 1;     min-width: 0; padding-right: 8px; }
 
   /* ── Main layout ─────────────────────────────────────────────────────────── */
   #main {

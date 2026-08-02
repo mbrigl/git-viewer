@@ -44,7 +44,7 @@ The full problem statement, the algorithms, and the project vocabulary live in
 | ---------------------- | -------------------------------------------------------------------- |
 | **Straight branches**  | All commits of a branch line share one vertical column                |
 | **Merge lines**        | Orthogonal L-shaped lines for merge edges; merge commits carry a double-circle marker |
-| **Branch/tag chips**   | Colored pill labels (green = local, blue = remote, amber = tag)       |
+| **Branch/tag chips**   | Colored pill labels (green = local, blue = remote, amber = tag) in their own column left of the graph, flush against the lanes; surplus refs collapse into a `+N` badge |
 | **Dark & light theme** | Switchable from the status bar; branch colors stay identical          |
 | **Stash & WIP rows**   | Stash entries and uncommitted changes appear as marked graph nodes     |
 | **Virtual rendering**  | Only visible rows are painted — smooth on large repositories          |
