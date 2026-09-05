@@ -29,7 +29,9 @@
     // Rust toolchain via rustup; rust-toolchain.toml pins the version.
     "ghcr.io/devcontainers/features/rust:1": {},
     // Bun is the JS package manager and build tool.
-    "ghcr.io/devcontainers-extra/features/bun:1": {}
+    "ghcr.io/devcontainers-extra/features/bun:1.1": {
+      "version": "1.4.1"
+    }
   },
 
   "customizations": {
