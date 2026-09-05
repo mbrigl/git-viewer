@@ -144,7 +144,7 @@
   }
 
   .diff-filepath {
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -171,7 +171,7 @@
     padding: 0;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--text-dimmer);
     cursor: pointer;
   }
@@ -199,7 +199,7 @@
     cursor: pointer;
     font-size: 13px;
     padding: 2px 6px;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     flex-shrink: 0;
     line-height: 1;
   }
@@ -220,7 +220,7 @@
   .diff-table {
     border-collapse: collapse;
     width: 100%;
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     line-height: 20px;
     white-space: pre;

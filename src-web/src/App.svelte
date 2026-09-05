@@ -10,15 +10,13 @@
   import StatusBar, { READY_STATUS } from './StatusBar.svelte';
   import { lineageRows } from './ancestry.ts';
   import type { GraphData, NodeJson, FileChange, DiffLine, RepoRefs } from './types.ts';
+  import { applyTheme, storedTheme, type Theme } from './theme/palette.ts';
 
   // ── Theme ────────────────────────────────────────────────────────────────
-  type Theme = 'dark' | 'light';
-  const storedTheme = typeof localStorage !== 'undefined' ? localStorage.getItem('theme') : null;
-  let theme = $state<Theme>(storedTheme === 'light' ? 'light' : 'dark');
+  let theme = $state<Theme>(storedTheme());
 
   $effect(() => {
-    document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem('theme', theme); } catch { /* ignore */ }
+    applyTheme(theme);
   });
 
   function toggleTheme(): void {
@@ -298,114 +296,12 @@
 />
 
 <style>
-  :global(*, *::before, *::after) {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
-
-  /* ── Theme tokens (dark default) ───────────────────────────────────────── */
-  :global(:root) {
-    --bg-app: #1a1d23;
-    --bg-chrome: #13151a;
-    --bg-panel: #0f1117;
-    --bg-hover: #1e2128;
-    --bg-elev: #2a2d35;
-    --bg-sel: #1a2535;
-
-    --border: #2a2d35;
-    --border-strong: #383b45;
-    --border-hover: #4a4d58;
-    --btn-hover-bg: #33363f;
-    --shadow: #00000070;
-
-    --text-brightest: #e8eaf0;
-    --text-bright: #e0e3e9;
-    --text: #d0d3d9;
-    --text-2: #c0c3ca;
-    --text-muted: #8b8fa8;
-    --text-dim: #5a5e6e;
-    --text-dimmer: #4a4e5e;
-    --text-faint: #3a3e4e;
-
-    --accent: #4caf7d;
-    --accent-bright: #5cc48d;
-    --accent-bg: #1a3a22;
-    --accent-border: #2a5a34;
-    --accent-bg-strong: #1e4d32;
-    --accent-border-strong: #2d6e47;
-    --accent-bg-strong-hover: #235a3a;
-    --accent-border-strong-hover: #3a8057;
-
-    --blue: #6b9fff;       --blue-bg: #162338;  --blue-border: #1f3a5a;
-    --amber: #e8a94a;      --amber-bg: #2e2412; --amber-border: #4a3a1a;
-    --red: #e06b75;        --red-bg: #3a1a1a;
-    --teal: #4ec9c9;       --teal-bg: #1a2a3a;
-    --error: #e05a5a;
-
-    /* diff viewer */
-    --diff-gutter-bg: #0d0f14;
-    --diff-add-bg: #0d2318;   --diff-add-gutter: #2a5a34; --diff-add-border: #1a3a22; --diff-add-text: #b8f0c8;
-    --diff-del-bg: #2a0d0d;   --diff-del-gutter: #5a2a2a; --diff-del-border: #3a1a1a; --diff-del-text: #f0b8bc;
-    --diff-hunk-bg: #111827;  --diff-hunk-text: #4a6080;  --diff-hunk-gutter-bg: #0a0d14;
-  }
-
-  /* ── Light theme overrides ─────────────────────────────────────────────── */
-  :global(:root[data-theme='light']) {
-    --bg-app: #ffffff;
-    --bg-chrome: #f3f4f6;
-    --bg-panel: #ffffff;
-    --bg-hover: #eceef2;
-    --bg-elev: #e6e8ec;
-    --bg-sel: #e3edff;
-
-    --border: #d8dbe0;
-    --border-strong: #cbd0d8;
-    --border-hover: #b5bcc7;
-    --btn-hover-bg: #e6e8ec;
-    --shadow: #00000026;
-
-    --text-brightest: #14171c;
-    --text-bright: #24272e;
-    --text: #2e333d;
-    --text-2: #3a3f4a;
-    --text-muted: #5d6470;
-    --text-dim: #767c8a;
-    --text-dimmer: #969cab;
-    --text-faint: #b3b9c4;
-
-    --accent: #2e9e63;
-    --accent-bright: #258a55;
-    --accent-bg: #e3f6ea;
-    --accent-border: #b7e4c8;
-    --accent-bg-strong: #d8f0e0;
-    --accent-border-strong: #aadcbf;
-    --accent-bg-strong-hover: #cdead6;
-    --accent-border-strong-hover: #93cfa9;
-
-    --blue: #2d6fdb;       --blue-bg: #e4edfb;  --blue-border: #bcd4f5;
-    --amber: #b5791f;      --amber-bg: #fbf0d8; --amber-border: #ecd6a6;
-    --red: #d23f4a;        --red-bg: #fbe4e6;
-    --teal: #1f9b9b;       --teal-bg: #def2f2;
-    --error: #d23f4a;
-
-    /* diff viewer */
-    --diff-gutter-bg: #f4f5f8;
-    --diff-add-bg: #e6f6ec;   --diff-add-gutter: #6aa67f; --diff-add-border: #c0e4ce; --diff-add-text: #14692f;
-    --diff-del-bg: #fbe9eb;   --diff-del-gutter: #c98a90; --diff-del-border: #f1cdd1; --diff-del-text: #9a2530;
-    --diff-hunk-bg: #eef2fb;  --diff-hunk-text: #4a6890;  --diff-hunk-gutter-bg: #e9ebf1;
-  }
-
+  /* Layout of the app shell; its colors and typography come from theme.css. */
   :global(body) {
-    background: var(--bg-app);
-    color: var(--text);
-    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-    font-size: 13px;
     display: flex;
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
-    -webkit-font-smoothing: antialiased;
   }
 
   /* ── Titlebar ────────────────────────────────────────────────────────────── */
@@ -462,11 +358,11 @@
     background: var(--bg-elev);
     color: var(--text-2);
     border: 1px solid var(--border-strong);
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     cursor: pointer;
     font-size: 12px;
     font-family: inherit;
-    transition: background 0.12s, border-color 0.12s;
+    transition: background var(--transition), border-color var(--transition);
     flex-shrink: 0;
   }
 
@@ -502,7 +398,7 @@
     padding: 4px 10px;
     background: var(--bg-hover);
     border: 1px solid var(--border);
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     overflow: hidden;
     max-width: 420px;
   }
@@ -514,7 +410,7 @@
   }
 
   .repo-path {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: var(--text-muted);
     white-space: nowrap;
@@ -545,7 +441,7 @@
      right-aligned because the chips below it hug the graph lanes. */
   .col-refs  { flex-shrink: 0; padding-right: 8px; text-align: right; }
   .col-graph { flex-shrink: 0; padding-left: 8px; }
-  .col-sha   { width: 80px; flex-shrink: 0; font-family: monospace; }
+  .col-sha   { width: 80px; flex-shrink: 0; font-family: var(--font-mono); }
   .col-desc  { flex: 1;     min-width: 0; padding-right: 8px; }
 
   /* ── Main layout ─────────────────────────────────────────────────────────── */

@@ -18,16 +18,29 @@
 
 <script lang="ts">
   import type { GraphData, NodeJson, Edge } from './types.ts';
+  import { FONTS, THEMES, seriesColor, type Theme } from './theme/palette.ts';
 
   // ── Props ──────────────────────────────────────────────────────────────────
   interface Props {
     graphData: GraphData | null;
     onSelectCommit?: (sha: string) => void;
-    theme?: 'dark' | 'light';
+    theme?: Theme;
     /** Rows of the selected commit's ancestry; when set, all other rows are dimmed. */
     highlightRows?: Set<number> | null;
+    /**
+     * The checked-out branch, so its chip can be marked as such. It comes from
+     * the refs payload, which is read together with the graph (ADR-0021), so the
+     * two cannot disagree about which branch that is.
+     */
+    headRef?: string | null;
   }
-  let { graphData, onSelectCommit, theme = 'dark', highlightRows = null }: Props = $props();
+  let {
+    graphData,
+    onSelectCommit,
+    theme = 'dark',
+    highlightRows = null,
+    headRef = null,
+  }: Props = $props();
 
   // Dim levels while an ancestry highlight is active: edges and node glyphs
   // fade strongly so the highlighted lines pop; text stays readable.
@@ -41,22 +54,8 @@
 
   const W_SHA = 80;
 
-  // GitKraken-style branch colors
-  const BRANCH_COLORS = [
-    '#4caf7d', // green  (primary / HEAD)
-    '#6b9fff', // blue
-    '#e8a94a', // amber
-    '#e06b75', // red/pink
-    '#b48efe', // purple
-    '#4ec9c9', // teal
-    '#f0a070', // peach
-    '#60c0e0', // sky
-    '#a0d060', // lime
-    '#e080b0', // rose
-  ];
-
   function branchColor(col: number): string {
-    return BRANCH_COLORS[col % BRANCH_COLORS.length];
+    return seriesColor(col);
   }
 
   // ── Theme palettes (canvas can't read CSS vars cheaply per frame) ──────────
@@ -66,28 +65,35 @@
     rowSel: string; accent: string; rowHover: string; rowSep: string;
     separator: string; nodeFill: string;
     shaSel: string; sha: string; msgSel: string; msg: string;
-    chipTag: Chip; chipRemote: Chip; chipLocal: Chip; chipMore: Chip;
+    chipTag: Chip; chipRemote: Chip; chipLocal: Chip; chipMore: Chip; chipHead: Chip;
   }
-  const PALETTES: Record<'dark' | 'light', Palette> = {
+  // Most entries are the shared tokens; the few literals are graph-specific
+  // shades with no CSS counterpart (the row tint behind a selected commit, the
+  // dimmed SHA column, the "+n more" chip, and the HEAD chip's brighter text).
+  const d = THEMES.dark;
+  const l = THEMES.light;
+  const PALETTES: Record<Theme, Palette> = {
     dark: {
-      bg: '#1a1d23', emptyTitle: '#3a3e4e', emptySub: '#2a2d35',
-      rowSel: '#1e2a3a', accent: '#4caf7d', rowHover: '#1e2128', rowSep: '#1e2128',
-      separator: '#2a2d35', nodeFill: '#1a1d23',
-      shaSel: '#6b9fff', sha: '#4a5070', msgSel: '#e8eaf0', msg: '#c0c3ca',
-      chipTag:    { bg: '#2e2412', text: '#e8a94a', border: '#4a3a1a' },
-      chipRemote: { bg: '#162338', text: '#6b9fff', border: '#1f3a5a' },
-      chipLocal:  { bg: '#1a3a22', text: '#4caf7d', border: '#2a5a34' },
+      bg: d.bgApp, emptyTitle: d.textFaint, emptySub: d.border,
+      rowSel: '#1e2a3a', accent: d.accent, rowHover: d.bgHover, rowSep: d.bgHover,
+      separator: d.border, nodeFill: d.bgApp,
+      shaSel: d.blue, sha: '#4a5070', msgSel: d.textBrightest, msg: d.text2,
+      chipTag:    { bg: d.amberBg, text: d.amber,  border: d.amberBorder },
+      chipRemote: { bg: d.blueBg,  text: d.blue,   border: d.blueBorder },
+      chipLocal:  { bg: d.accentBg, text: d.accent, border: d.accentBorder },
       chipMore:   { bg: '#23262e', text: '#8a8f9e', border: '#343845' },
+      chipHead:   { bg: d.accentBgStrong, text: '#7fe0aa', border: d.accent },
     },
     light: {
-      bg: '#ffffff', emptyTitle: '#b3b9c4', emptySub: '#cbd0d8',
-      rowSel: '#e3edff', accent: '#2e9e63', rowHover: '#eceef2', rowSep: '#eef0f3',
-      separator: '#d8dbe0', nodeFill: '#ffffff',
-      shaSel: '#2d6fdb', sha: '#969cab', msgSel: '#14171c', msg: '#3a3f4a',
-      chipTag:    { bg: '#fbf0d8', text: '#b5791f', border: '#ecd6a6' },
-      chipRemote: { bg: '#e4edfb', text: '#2d6fdb', border: '#bcd4f5' },
-      chipLocal:  { bg: '#e3f6ea', text: '#2e9e63', border: '#b7e4c8' },
+      bg: l.bgApp, emptyTitle: l.textFaint, emptySub: l.borderStrong,
+      rowSel: l.bgSel, accent: l.accent, rowHover: l.bgHover, rowSep: '#eef0f3',
+      separator: l.border, nodeFill: l.bgPanel,
+      shaSel: l.blue, sha: l.textDimmer, msgSel: l.textBrightest, msg: l.text2,
+      chipTag:    { bg: l.amberBg, text: l.amber,  border: l.amberBorder },
+      chipRemote: { bg: l.blueBg,  text: l.blue,   border: l.blueBorder },
+      chipLocal:  { bg: l.accentBg, text: l.accent, border: l.accentBorder },
       chipMore:   { bg: '#eef0f3', text: '#6b7180', border: '#d3d7de' },
+      chipHead:   { bg: '#cdead6', text: '#1f7a4c', border: l.accent },
     },
   };
   const pal: Palette = $derived(PALETTES[theme]);
@@ -192,10 +198,10 @@
 
     if (index.rowCount === 0) {
       ctx.fillStyle = pal.emptyTitle;
-      ctx.font = '13px system-ui, sans-serif';
+      ctx.font = `13px ${FONTS.ui}`;
       ctx.textAlign = 'center';
       ctx.fillText('Open a Git repository to get started', W / 2, H / 2 - 10);
-      ctx.font = '11px system-ui, sans-serif';
+      ctx.font = `11px ${FONTS.ui}`;
       ctx.fillStyle = pal.emptySub;
       ctx.fillText('Use "Open Repo" in the toolbar above', W / 2, H / 2 + 12);
       ctx.textAlign = 'left';
@@ -402,7 +408,7 @@
     let x = infoX + 8;
 
     // SHA
-    ctx!.font = '11px "Cascadia Code", "Fira Code", "JetBrains Mono", monospace';
+    ctx!.font = `11px ${FONTS.mono}`;
     ctx!.fillStyle = isSelected ? pal.shaSel : pal.sha;
     ctx!.fillText(node.shortSha, x, textY);
     x += W_SHA;
@@ -412,8 +418,8 @@
     const msgW = Math.max(60, canvasW - 8 - x);
 
     ctx!.font = isSelected
-      ? '500 12px "Segoe UI", system-ui, sans-serif'
-      : '12px "Segoe UI", system-ui, sans-serif';
+      ? `500 12px ${FONTS.ui}`
+      : `12px ${FONTS.ui}`;
     ctx!.fillStyle = isSelected ? pal.msgSel : pal.msg;
     ctx!.fillText(truncateText(node.message, msgW), x, textY);
     ctx!.globalAlpha = 1;

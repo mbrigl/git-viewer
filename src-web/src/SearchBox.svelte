@@ -142,7 +142,7 @@
     padding: 0 6px 0 8px;
     background: var(--bg-elev);
     border: 1px solid var(--border);
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     color: var(--text-muted);
   }
 
@@ -175,7 +175,7 @@
 
   .search-count {
     font-size: 10px;
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-family: var(--font-mono);
     color: var(--text-dim);
     white-space: nowrap;
   }
@@ -193,7 +193,7 @@
     padding: 0;
     background: transparent;
     border: none;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     color: var(--text-muted);
     cursor: pointer;
   }
@@ -222,7 +222,7 @@
     overflow-y: auto;
     background: var(--bg-panel);
     border: 1px solid var(--border-strong);
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     box-shadow: 0 8px 24px var(--shadow);
     z-index: 200; /* above the diff overlay */
     display: flex;
@@ -253,7 +253,7 @@
   }
 
   .hit-sha {
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     color: var(--blue);
     width: 52px;

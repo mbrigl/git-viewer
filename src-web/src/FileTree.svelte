@@ -128,9 +128,9 @@
     font-size: 9px;
     font-weight: 700;
     padding: 1px 6px;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     line-height: 14px;
-    font-family: monospace;
+    font-family: var(--font-mono);
   }
 
   .file-row {
@@ -156,7 +156,7 @@
   .file-status {
     width: 14px;
     height: 14px;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     font-size: 9px;
     font-weight: 700;
     display: flex;
@@ -180,7 +180,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text-2);
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-family: var(--font-mono);
     font-size: 10.5px;
   }
 
@@ -198,7 +198,7 @@
     display: flex;
     gap: 3px;
     flex-shrink: 0;
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
   }
 

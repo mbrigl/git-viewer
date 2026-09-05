@@ -271,7 +271,7 @@
   }
 
   .detail-sha {
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: var(--blue);
     word-break: break-all;
@@ -294,7 +294,7 @@
   }
 
   .copied-badge {
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: var(--font-ui);
     font-size: 9px;
     font-weight: 700;
     text-transform: uppercase;
@@ -302,7 +302,7 @@
     color: var(--accent);
     background: var(--accent-bg);
     border: 1px solid var(--accent-border);
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     padding: 1px 5px;
     margin-left: 6px;
     white-space: nowrap;
@@ -319,7 +319,7 @@
     display: inline-flex;
     align-items: center;
     padding: 2px 7px;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     font-size: 10px;
     font-weight: 500;
     line-height: 16px;
@@ -337,11 +337,11 @@
   }
 
   .sha-link {
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     line-height: 16px;
     padding: 2px 7px;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     background: var(--blue-bg);
     color: var(--blue);
     border: 1px solid var(--blue-border);
@@ -410,7 +410,7 @@
   .detail-date {
     font-size: 11px;
     color: var(--text-dim);
-    font-family: monospace;
+    font-family: var(--font-mono);
   }
 
   .detail-author-row {
@@ -425,7 +425,7 @@
     font-size: 9px;
     font-weight: 700;
     padding: 1px 5px;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     letter-spacing: 0;
     line-height: 14px;
   }
@@ -445,7 +445,7 @@
     padding: 0;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--text-dimmer);
     cursor: pointer;
   }
@@ -516,7 +516,7 @@
   .file-status {
     width: 14px;
     height: 14px;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     font-size: 9px;
     font-weight: 700;
     display: flex;
@@ -540,7 +540,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text-2);
-    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-family: var(--font-mono);
     font-size: 10.5px;
   }
 
@@ -558,7 +558,7 @@
     display: flex;
     gap: 3px;
     flex-shrink: 0;
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
   }
 

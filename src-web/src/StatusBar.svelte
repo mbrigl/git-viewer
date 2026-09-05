@@ -114,7 +114,7 @@
     padding: 0;
     background: transparent;
     border: none;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     color: var(--text-dim);
     cursor: pointer;
   }

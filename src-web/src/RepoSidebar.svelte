@@ -332,7 +332,7 @@
     background: var(--bg-panel);
     border-right: 1px solid var(--border);
     overflow: hidden;
-    transition: width 0.12s;
+    transition: width var(--transition);
   }
 
   /* Minimised: wide enough for a glyph and its count, nothing more. */
@@ -357,7 +357,7 @@
     flex-shrink: 0;
     background: none;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--text-dim);
     font-size: 15px;
     line-height: 1;
@@ -371,7 +371,7 @@
 
   .chevron {
     display: inline-block;
-    transition: transform 0.12s;
+    transition: transform var(--transition);
   }
 
   .chevron.flipped {
@@ -397,7 +397,7 @@
     height: 30px;
     background: none;
     border: none;
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     color: var(--text-muted);
     cursor: pointer;
   }
@@ -420,7 +420,7 @@
     font-size: 8px;
     line-height: 1;
     padding: 1px 2px;
-    border-radius: 3px;
+    border-radius: var(--radius-xs);
     background: var(--bg-elev);
     color: var(--text-dim);
   }
@@ -435,7 +435,7 @@
     height: 26px;
     background: var(--bg-hover);
     border: 1px solid var(--border);
-    border-radius: 5px;
+    border-radius: var(--radius-md);
   }
 
   .filter svg {
