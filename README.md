@@ -44,7 +44,9 @@ The full problem statement, the algorithms, and the project vocabulary live in
 | ---------------------- | -------------------------------------------------------------------- |
 | **Straight branches**  | All commits of a branch line share one vertical column                |
 | **Merge lines**        | Orthogonal L-shaped lines for merge edges; merge commits carry a double-circle marker |
-| **Branch/tag chips**   | Colored pill labels (green = local, blue = remote, amber = tag) in their own column left of the graph, flush against the lanes; surplus refs collapse into a `+N` badge |
+| **Branch/tag chips**   | Colored pill labels (green = local, blue = remote, amber = tag) in their own column left of the graph, flush against the lanes; the checked-out branch carries a tick and is never collapsed, surplus refs collapse into a `+N` badge |
+| **Repository sidebar** | Local branches with ahead/behind, remote branches per remote, working trees, tags, and submodules — filterable, collapsible, minimisable to an icon rail |
+| **Repository switching**| Selecting a submodule opens it, selecting a working tree switches to it, and a parent row leads back to the superproject or main working tree |
 | **Dark & light theme** | Switchable from the status bar; branch colors stay identical          |
 | **Stash & WIP rows**   | Stash entries and uncommitted changes appear as marked graph nodes     |
 | **Virtual rendering**  | Only visible rows are painted — smooth on large repositories          |
@@ -131,6 +133,12 @@ open a repository — either via the folder picker in the toolbar or by passing 
 The graph loads in the background, with progress shown in the status bar — including a note when
 the commit limit truncated the history. Scroll through the history; branch and tag chips mark the
 commits the refs point at.
+
+The sidebar on the left lists what the repository *contains*: branches, remotes, working trees,
+tags, and submodules. Selecting a branch or tag reveals its commit in the graph; selecting a
+submodule opens that repository, and selecting a working tree switches to that checkout. When the
+open repository is a submodule or a linked working tree, a row above the sections leads back to its
+superproject or main working tree.
 
 Select any row — by click or with `↑`/`↓` — to see the commit detail: SHA (click it to copy),
 message, author, date and committer, the commit's parents and children as clickable links, plus

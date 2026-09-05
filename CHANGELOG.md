@@ -10,14 +10,26 @@ Update the **Unreleased** section in the same change as any user-visible modific
 ### Added
 
 - A **repository sidebar** on the left (ADR-0021) listing what a repository contains rather than
-  only what the visible commits carry: local branches with their ahead/behind counts and the
-  checked-out one marked, remote branches grouped per remote, working trees (the main one included),
-  and tags. Names with slashes are grouped into folders, a filter field narrows every section at
+  only what the visible commits carry: local branches with their ahead/behind counts, remote
+  branches grouped per remote, working trees (the main one included), and tags. The checked-out
+  branch is marked three ways over — a tick glyph, an accent row, and a "checked out" badge that
+  says it in words — and the folders leading down to it are tinted, so a collapsed folder cannot
+  hide it. Names with slashes are grouped into folders, a filter field narrows every section at
   once, and selecting an entry reveals and selects the commit it points at. Refs pointing outside
   the loaded history are shown but inert, since there is no row to reveal. The sidebar reads and
   navigates only — it does not check out, fetch, or write anything. It minimises to a narrow rail
   of section icons that gives the width back to the graph; clicking an icon expands it again on
   that section, and the choice is remembered across sessions.
+- A **Submodules section** in that sidebar (ADR-0022), listing every configured submodule with the
+  commit the superproject pins it to and whether its working copy still sits on that commit —
+  *modified* when it has drifted, *not initialized* when it was never checked out. Nothing is
+  cloned to find out; an uninitialized submodule is reported, not fetched.
+- **Moving between the repositories a project is made of.** Selecting a submodule opens it, and
+  selecting a working tree switches to that checkout — its `HEAD`, its checked-out branch, its
+  uncommitted changes. Both are reversible: the sidebar shows the repository one level up — the
+  superproject, or the main working tree — as a row above the sections. That parent is read from
+  git rather than remembered from the way in, so it is there even when the submodule was opened
+  straight from the folder picker. The working tree being viewed is marked and inert.
 - A **release pipeline** (ADR-0020): pushing a `v*` tag builds installers for Windows (`.msi`,
   NSIS `.exe`), macOS (`.dmg` for Apple Silicon and Intel), and Linux (`.deb`, `.rpm`, AppImage)
   plus one distribution-independent **Flatpak bundle**, and attaches them all to a draft GitHub
@@ -75,6 +87,10 @@ Update the **Unreleased** section in the same change as any user-visible modific
   badges sit flush against the lanes, so one is always directly left of the commit it marks, and
   refs that do not fit collapse into a `+N` badge instead of vanishing. A single badge wider than
   the column is truncated instead of bleeding into the graph lanes.
+- The **checked-out branch is marked in the graph too**: its badge carries a tick, its own colours
+  and a heavier outline, and it is laid out first so it is never the one that collapses into the
+  `+N` count. A row whose badges do not all fit now keeps a name on it — previously a commit
+  carrying one long branch name could degrade to a bare `+3`, which named nothing at all.
 - The graph rows **drop the Author and Date columns**: branch/tag, graph, SHA and description are
   what a row needs, and the description takes the freed width. Author, committer and date are
   unchanged in the commit detail panel.
