@@ -49,6 +49,10 @@
   // Lineage highlight: rows of the selected commit, its loaded ancestors, and
   // its descendants; null (no selection) means nothing is dimmed.
   const highlightRows = $derived(selectedNode ? lineageRows(selectedNode, nodeBySha) : null);
+  // The checked-out branch, taken from the refs payload so the graph can mark
+  // its chip. Detached HEAD leaves it null and nothing is marked.
+  const headRef = $derived(repoRefs?.locals.find(b => b.isHead)?.name ?? null);
+
   // Width of the graph lane area — the column header mirrors the canvas layout.
   const graphColWidth = $derived.by(() => {
     const nodes = graphData?.nodes ?? [];
@@ -272,7 +276,14 @@
       </div>
 
       <div id="canvas-container">
-        <GraphCanvas bind:this={graphCanvas} {graphData} {onSelectCommit} {theme} {highlightRows} />
+        <GraphCanvas
+          bind:this={graphCanvas}
+          {graphData}
+          {onSelectCommit}
+          {theme}
+          {highlightRows}
+          {headRef}
+        />
 
         {#if diffFile !== null}
           <div id="diff-overlay">

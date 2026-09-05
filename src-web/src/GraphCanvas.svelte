@@ -174,7 +174,7 @@
   });
 
   $effect(() => {
-    const _ = [graphData, scrollY, hoveredRow, selectedRow, theme, highlightRows];
+    const _ = [graphData, scrollY, hoveredRow, selectedRow, theme, highlightRows, headRef];
     render();
   });
 
@@ -430,60 +430,105 @@
   const CHIP_PAD = 6;  // horizontal padding inside a chip, per side
   const CHIP_GAP = 4;  // space between two chips
 
+  /** What a chip is, which decides both its colours and its label. */
+  type ChipKind = 'head' | 'tag' | 'remote' | 'local' | 'more';
+
+  interface PlannedChip { label: string; width: number; kind: ChipKind; }
+
+  /// Classifies one ref name. The `HEAD` test runs first: a branch name may
+  /// contain a slash, and `feat/x` must not be mistaken for a remote branch.
+  function chipKind(ref: string): ChipKind {
+    if (headRef !== null && ref === headRef) return 'head';
+    if (ref.startsWith('🏷')) return 'tag';
+    return ref.includes('/') ? 'remote' : 'local';
+  }
+
+  function chipPalette(kind: ChipKind): Chip {
+    switch (kind) {
+      case 'head':   return pal.chipHead;
+      case 'tag':    return pal.chipTag;
+      case 'remote': return pal.chipRemote;
+      case 'more':   return pal.chipMore;
+      default:       return pal.chipLocal;
+    }
+  }
+
+  /// The text drawn in the chip. The checked-out branch carries a tick, so it
+  /// says what it is even where the colour is hard to judge — next to another
+  /// green chip, or for a reader who cannot tell the two greens apart.
+  function chipLabel(ref: string, kind: ChipKind): string {
+    return kind === 'head' ? `✓ ${ref}` : ref;
+  }
+
   /// Widths of a chip's text and of the chip around it.
   function chipWidth(label: string): number {
     return ctx!.measureText(label).width + 2 * CHIP_PAD;
   }
 
-  /// Decides which of a row's chips fit into the refs column. Chips are kept in
-  /// order and the ones that do not fit collapse into a single `+N` badge, so a
-  /// commit with many refs still shows that they exist. The result is laid out
-  /// flush against the graph lanes — a chip always sits directly left of its
-  /// commit, however many refs the row carries.
-  function planRefChips(refs: string[]): { label: string; width: number; more: boolean }[] {
+  /// Decides which of a row's chips fit into the refs column.
+  ///
+  /// Chips are kept in order and the ones that do not fit collapse into a single
+  /// `+N` badge, so a commit with many refs still shows that they exist. Two
+  /// rules protect what matters most: the checked-out branch is moved to the
+  /// front, because it must never be the chip that gets collapsed away, and the
+  /// leading chip is shrunk before it is dropped — a row showing nothing but a
+  /// count says which refs it holds no better than an empty row does.
+  function planRefChips(refs: string[]): PlannedChip[] {
+    const decorated = [...refs]
+      .sort((a, b) => Number(chipKind(b) === 'head') - Number(chipKind(a) === 'head'))
+      .map(ref => {
+        const kind = chipKind(ref);
+        return { kind, label: chipLabel(ref, kind) };
+      });
+
     const avail = REFS_WIDTH - 16;
-    const plan: { label: string; width: number; more: boolean }[] = [];
+    const plan: PlannedChip[] = [];
     let used = 0;
 
-    for (const ref of refs) {
-      const w = chipWidth(ref);
+    for (const chip of decorated) {
+      const width = chipWidth(chip.label);
       const gap = plan.length === 0 ? 0 : CHIP_GAP;
-      if (used + gap + w > avail) break;
-      plan.push({ label: ref, width: w, more: false });
-      used += gap + w;
+      if (used + gap + width > avail) break;
+      plan.push({ ...chip, width });
+      used += gap + width;
     }
 
-    if (plan.length === 0) {
-      // A single ref wider than the whole column: truncate it, reserving room
-      // for the badge that the remaining refs collapse into.
-      const rest  = refs.length - 1;
-      const badge = rest > 0 ? chipWidth(`+${rest}`) + CHIP_GAP : 0;
-      const room  = avail - badge - 2 * CHIP_PAD;
-      if (room >= 12) {
-        const label = truncateText(refs[0], room);
-        plan.push({ label, width: chipWidth(label), more: false });
-        used = chipWidth(label);
-      }
-    }
-
-    let hidden = refs.length - plan.length;
+    let hidden = decorated.length - plan.length;
     if (hidden === 0) return plan;
 
-    // Make room for the badge by dropping trailing chips until it fits. Its
-    // label grows as chips are dropped, so the width is re-measured each round.
+    // Make room for the badge. Trailing chips go first; once only the leading
+    // one is left it is truncated instead, so the row keeps a name on it.
     for (;;) {
+      // Truncating the leading chip can leave nothing hidden after all, and a
+      // "+0" badge would be a count of nothing.
+      if (hidden === 0) return plan;
+
       const badge = chipWidth(`+${hidden}`);
-      if (used + (plan.length === 0 ? 0 : CHIP_GAP) + badge <= avail) {
-        plan.push({ label: `+${hidden}`, width: badge, more: true });
+      if (plan.length > 0 && used + CHIP_GAP + badge <= avail) {
+        plan.push({ label: `+${hidden}`, width: badge, kind: 'more' });
         return plan;
       }
-      if (plan.length === 0) {
-        // Not even a badge fits — nothing readable can be drawn.
-        return [];
+
+      if (plan.length > 1) {
+        const dropped = plan.pop()!;
+        used -= dropped.width + CHIP_GAP;
+        hidden++;
+        continue;
       }
-      const dropped = plan.pop()!;
-      used -= dropped.width + (plan.length === 0 ? 0 : CHIP_GAP);
-      hidden++;
+
+      const room = avail - badge - CHIP_GAP - 2 * CHIP_PAD;
+      if (room < 12) {
+        // Not even a truncated chip and a badge fit: the count is all there is.
+        const all = `+${decorated.length}`;
+        return [{ label: all, width: chipWidth(all), kind: 'more' }];
+      }
+
+      const first = decorated[0];
+      const label = truncateText(first.label, room);
+      plan.length = 0;
+      plan.push({ label, width: chipWidth(label), kind: first.kind });
+      used = chipWidth(label);
+      hidden = decorated.length - 1;
     }
   }
 
@@ -491,7 +536,7 @@
   /// end where the graph lanes begin.
   function drawRefChips(refs: string[], rowY: number): void {
     if (!refs || refs.length === 0) return;
-    ctx!.font = '10px "Segoe UI", system-ui, sans-serif';
+    ctx!.font = `10px ${FONTS.ui}`;
 
     const plan = planRefChips(refs);
     if (plan.length === 0) return;
@@ -501,16 +546,16 @@
     const arc = 3;
     let x = REFS_WIDTH - 8 - total;
 
-    for (const { label, width, more } of plan) {
-      const isTag    = label.startsWith('🏷');
-      const isRemote = label.includes('/');
-      const chip = more ? pal.chipMore : isTag ? pal.chipTag : isRemote ? pal.chipRemote : pal.chipLocal;
+    for (const { label, width, kind } of plan) {
+      const chip = chipPalette(kind);
 
       ctx!.fillStyle = chip.bg;
       roundRect(x, chipY, width, CHIP_H, arc);
       ctx!.fill();
+      // The checked-out branch gets a heavier outline as well as its own
+      // colours — one more difference that does not rely on hue.
       ctx!.strokeStyle = chip.border;
-      ctx!.lineWidth = 0.75;
+      ctx!.lineWidth = kind === 'head' ? 1.25 : 0.75;
       roundRect(x, chipY, width, CHIP_H, arc);
       ctx!.stroke();
       ctx!.lineWidth = LINE_WIDTH;
