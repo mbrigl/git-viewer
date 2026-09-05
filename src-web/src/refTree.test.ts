@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { countLeaves, filterByName, groupByFolder } from './refTree.ts';
+import { anyLeaf, countLeaves, filterByName, groupByFolder } from './refTree.ts';
 
 interface Ref {
   name: string;
@@ -85,5 +85,24 @@ describe('filterByName', () => {
 describe('countLeaves', () => {
   test('counts entries across every level', () => {
     expect(countLeaves(groupByFolder(refs('a', 'b/c', 'b/d/e')))).toBe(3);
+  });
+});
+
+describe('anyLeaf', () => {
+  const tree = groupByFolder(refs('main', 'feat/a', 'feat/deep/b'));
+
+  test('finds an entry at any depth below the folder', () => {
+    expect(anyLeaf(tree, r => r.name === 'main')).toBe(true);
+    expect(anyLeaf(tree, r => r.name === 'feat/deep/b')).toBe(true);
+  });
+
+  test('a folder only reports what is actually inside it', () => {
+    const feat = tree.folders.find(f => f.name === 'feat')!;
+    expect(anyLeaf(feat, r => r.name === 'feat/deep/b')).toBe(true);
+    expect(anyLeaf(feat, r => r.name === 'main')).toBe(false);
+  });
+
+  test('no match anywhere is false', () => {
+    expect(anyLeaf(tree, r => r.name === 'nope')).toBe(false);
   });
 });

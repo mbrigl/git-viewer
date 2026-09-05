@@ -76,3 +76,19 @@ export function filterByName<T extends Named>(items: T[], query: string): T[] {
 export function countLeaves<T extends Named>(folder: RefFolder<T>): number {
   return folder.leaves.length + folder.folders.reduce((sum, f) => sum + countLeaves(f), 0);
 }
+
+/**
+ * Whether any entry in a folder or below it satisfies `pred`.
+ *
+ * The checked-out branch is what this exists for: `feat/sidebar` sits inside a
+ * folder, and a collapsed folder would otherwise hide the one row the user most
+ * needs to find. Marking the folders on the way down keeps it visible.
+ */
+export function anyLeaf<T extends Named>(
+  folder: RefFolder<T>,
+  pred: (item: T) => boolean,
+): boolean {
+  return (
+    folder.leaves.some(leaf => pred(leaf.item)) || folder.folders.some(f => anyLeaf(f, pred))
+  );
+}

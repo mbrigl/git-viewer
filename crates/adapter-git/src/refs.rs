@@ -1,15 +1,21 @@
-//! Reads what the repository sidebar lists (ADR-0021): local branches, remote
-//! branches grouped by their remote, working trees, and tags.
+//! Reads what the repository sidebar lists (ADR-0021, ADR-0022): local branches,
+//! remote branches grouped by their remote, working trees, tags, submodules, and
+//! the repository one level up.
 //!
 //! This is a read of repository *state*, not of history — nothing here produces
-//! nodes or edges. Every entry resolves to a commit SHA, which is all the
-//! sidebar needs to navigate to it.
+//! nodes or edges. Branches, worktrees and tags resolve to a commit SHA, which is
+//! all the sidebar needs to navigate to it. Submodules and the parent resolve to
+//! a *path* instead: they name another repository, which the sidebar opens rather
+//! than navigates within.
 //!
 //! A single unreadable ref must not blank the whole panel, so each loader skips
 //! entries it cannot resolve instead of failing the read. Only opening the
 //! repository itself is fatal, and that fails the history load as well.
 
-use crate::models::{LocalBranch, Remote, RemoteBranch, RepoRefs, Tag, Worktree};
+use crate::models::{
+    LocalBranch, ParentKind, ParentRepo, Remote, RemoteBranch, RepoRefs, Submodule, SubmoduleState,
+    Tag, Worktree,
+};
 use anyhow::Result;
 use git2::{BranchType, ObjectType, Repository};
 use std::path::Path;
@@ -24,6 +30,8 @@ pub fn load_repo_refs(repo_path: &Path) -> Result<RepoRefs> {
         remotes: load_remotes(&repo, &remote_names),
         worktrees: load_worktrees(&repo),
         tags: load_tags(&repo),
+        submodules: load_submodules(&repo),
+        parent: find_parent(&repo),
     })
 }
 
@@ -183,23 +191,59 @@ fn head_of(repo: &Repository) -> (Option<String>, String) {
     (branch, sha)
 }
 
+/// The main working tree's repository handle.
+///
+/// Opened through `commondir` when a linked worktree is being viewed: `repo`
+/// then describes *that* worktree, and its `workdir` is not the main one. The
+/// shared git directory is the only route back, which is also what makes the
+/// parent row work for a worktree.
+fn main_repo(repo: &Repository) -> Option<Repository> {
+    if repo.is_worktree() {
+        Repository::open(repo.commondir()).ok()
+    } else {
+        None
+    }
+}
+
+/// The label a path gets in the sidebar: its last component.
+fn dir_name(path: &Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string_lossy().to_string())
+}
+
+/// Compares two paths for "the same directory", canonicalizing when the
+/// filesystem allows it so that a symlinked or `..`-containing path still
+/// matches. A path that cannot be canonicalized (a submodule that was never
+/// checked out) falls back to a plain comparison.
+fn same_dir(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
 fn load_worktrees(repo: &Repository) -> Vec<Worktree> {
     let mut out = Vec::new();
+    let main = main_repo(repo);
+    // Viewed from a linked worktree, `repo` is that worktree — the main working
+    // tree has to be read through the shared git directory, or it would be
+    // listed as the linked one and appear twice.
+    let main_ref = main.as_ref().unwrap_or(repo);
+    let current_workdir = repo.workdir().map(Path::to_path_buf);
 
     // `Repository::worktrees` reports linked worktrees only, so the main
     // working tree has to be added explicitly. A bare repository has none.
-    if let Some(workdir) = repo.workdir() {
-        let (branch, sha) = head_of(repo);
+    if let Some(workdir) = main_ref.workdir() {
+        let (branch, sha) = head_of(main_ref);
         out.push(Worktree {
-            name: workdir
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| workdir.to_string_lossy().to_string()),
+            name: dir_name(workdir),
             path: workdir.to_string_lossy().to_string(),
             branch,
             short_sha: short(&sha),
             sha,
             is_main: true,
+            is_current: !repo.is_worktree(),
         });
     }
 
@@ -217,17 +261,124 @@ fn load_worktrees(repo: &Repository) -> Vec<Worktree> {
             Err(_) => (None, String::new()),
         };
 
+        let path = worktree.path().to_path_buf();
+        let is_current = current_workdir
+            .as_deref()
+            .is_some_and(|current| same_dir(current, &path));
+
         out.push(Worktree {
             name: name.to_string(),
-            path: worktree.path().to_string_lossy().to_string(),
+            path: path.to_string_lossy().to_string(),
             branch,
             short_sha: short(&sha),
             sha,
             is_main: false,
+            is_current,
         });
     }
 
     out
+}
+
+/// Derives a submodule's state from the two commit ids git tracks for it: the
+/// one the superproject pins, and the one its working copy actually has.
+///
+/// Kept separate from the `git2` walk so the rule — which is the whole meaning
+/// of the row's badge — is testable without a repository on disk.
+fn submodule_state(pinned: Option<&str>, checked_out: Option<&str>) -> SubmoduleState {
+    match (pinned, checked_out) {
+        (_, None) => SubmoduleState::Uninitialized,
+        (Some(pinned), Some(checked_out)) if pinned != checked_out => SubmoduleState::Modified,
+        _ => SubmoduleState::InSync,
+    }
+}
+
+/// Reads the submodules the superproject configures.
+///
+/// Every id here belongs to the submodule's own object database, never to this
+/// repository's, so none of them is a commit the graph could reveal — the path
+/// is what the sidebar acts on (ADR-0022).
+fn load_submodules(repo: &Repository) -> Vec<Submodule> {
+    let Ok(submodules) = repo.submodules() else {
+        return Vec::new();
+    };
+    let Some(workdir) = repo.workdir() else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for submodule in submodules {
+        let path = submodule.path().to_path_buf();
+        let name = submodule
+            .name()
+            .map(str::to_string)
+            .unwrap_or_else(|| path.to_string_lossy().to_string());
+
+        // `workdir_id` is only set once the submodule has a working copy; an
+        // absent one is exactly what "uninitialized" means.
+        let checked_out = submodule.workdir_id().map(|oid| oid.to_string());
+        let pinned = submodule.head_id().map(|oid| oid.to_string());
+        let state = submodule_state(pinned.as_deref(), checked_out.as_deref());
+
+        let full_path = workdir.join(&path);
+        let sha = pinned.unwrap_or_default();
+        out.push(Submodule {
+            name,
+            path: path.to_string_lossy().to_string(),
+            workdir: match state {
+                SubmoduleState::Uninitialized => String::new(),
+                _ => full_path.to_string_lossy().to_string(),
+            },
+            url: submodule.url().map(str::to_string),
+            short_sha: short(&sha),
+            sha,
+            checked_out_short_sha: checked_out.as_deref().map(short),
+            state,
+        });
+    }
+
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    out
+}
+
+/// Finds the repository one level up, so the sidebar offers a way back out
+/// (ADR-0022).
+///
+/// Two cases, in order: a linked worktree belongs to a main working tree, found
+/// through the shared git directory; a submodule's working copy sits inside its
+/// superproject, found by discovering upwards from the directory above it.
+///
+/// The upward search alone is not enough — any repository may happen to lie
+/// inside another one. The candidate only counts as a parent when one of *its*
+/// submodules resolves to this working directory, which is the same question
+/// `git rev-parse --show-superproject-working-tree` answers.
+fn find_parent(repo: &Repository) -> Option<ParentRepo> {
+    if let Some(main) = main_repo(repo)
+        && let Some(workdir) = main.workdir()
+    {
+        return Some(ParentRepo {
+            kind: ParentKind::MainWorktree,
+            name: dir_name(workdir),
+            path: workdir.to_string_lossy().to_string(),
+        });
+    }
+
+    let workdir = repo.workdir()?;
+    let above = workdir.parent()?;
+    let candidate = Repository::discover(above).ok()?;
+    let candidate_workdir = candidate.workdir()?.to_path_buf();
+
+    let configures_us = candidate
+        .submodules()
+        .ok()?
+        .iter()
+        .any(|submodule| same_dir(&candidate_workdir.join(submodule.path()), workdir));
+
+    configures_us.then(|| ParentRepo {
+        kind: ParentKind::Superproject,
+        name: dir_name(&candidate_workdir),
+        path: candidate_workdir.to_string_lossy().to_string(),
+    })
 }
 
 fn load_tags(repo: &Repository) -> Vec<Tag> {
@@ -308,5 +459,48 @@ mod tests {
         assert_eq!(split_remote_branch("main", &configured), None);
         assert_eq!(split_remote_branch("origin/", &configured), None);
         assert_eq!(split_remote_branch("/main", &configured), None);
+    }
+
+    /// No working copy means uninitialized, whatever the superproject pins —
+    /// the viewer never clones one to find out (ADR-0016).
+    #[test]
+    fn a_submodule_without_a_working_copy_is_uninitialized() {
+        assert_eq!(
+            submodule_state(Some("abc"), None),
+            SubmoduleState::Uninitialized
+        );
+        assert_eq!(submodule_state(None, None), SubmoduleState::Uninitialized);
+    }
+
+    /// A working copy on a different commit than the pin is the "modified"
+    /// state git itself reports for a submodule.
+    #[test]
+    fn a_working_copy_off_the_pin_is_modified() {
+        assert_eq!(
+            submodule_state(Some("abc"), Some("def")),
+            SubmoduleState::Modified
+        );
+        assert_eq!(
+            submodule_state(Some("abc"), Some("abc")),
+            SubmoduleState::InSync
+        );
+    }
+
+    /// A superproject that records no commit for the submodule has nothing for
+    /// the working copy to deviate from, so the row must not claim it drifted.
+    #[test]
+    fn no_pin_recorded_is_not_modified() {
+        assert_eq!(submodule_state(None, Some("abc")), SubmoduleState::InSync);
+    }
+
+    /// Path comparison drives both the parent check and the current-worktree
+    /// mark, so a trailing `..` must not make two names for one directory look
+    /// like two directories.
+    #[test]
+    fn same_dir_sees_through_relative_segments() {
+        let here = std::env::current_dir().expect("a working directory");
+        let detour = here.join("src").join("..");
+        assert!(same_dir(&here, &detour));
+        assert!(!same_dir(&here, &here.join("src")));
     }
 }

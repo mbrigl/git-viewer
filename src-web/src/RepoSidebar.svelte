@@ -1,9 +1,14 @@
 <script lang="ts">
-  // The repository sidebar (ADR-0021): local branches, remote branches grouped
-  // by remote, working trees, and tags. It navigates and nothing else — the
-  // specification's "Not a git client" Non-Goal rules out checkout, fetch, and
-  // every other write, however much the layout invites them.
-  import { countLeaves, filterByName, groupByFolder } from './refTree.ts';
+  // The repository sidebar (ADR-0021, ADR-0022): local branches, remote branches
+  // grouped by remote, working trees, tags, and submodules. It navigates and
+  // nothing else — the specification's "Not a git client" Non-Goal rules out
+  // checkout, fetch, and every other write, however much the layout invites them.
+  //
+  // Rows come in two kinds. Branches and tags *reveal* a commit in the graph.
+  // Working trees, submodules and the parent row *open* a repository, because
+  // what they point at is a different checkout or a different object database
+  // (ADR-0022) — switching is a full reload, so those rows say where they lead.
+  import { anyLeaf, countLeaves, filterByName, groupByFolder } from './refTree.ts';
   import type { RefFolder } from './refTree.ts';
   import type { RepoRefs } from './types.ts';
 
@@ -12,8 +17,10 @@
     /** SHAs present in the loaded graph; a ref outside it has nowhere to jump to. */
     loadedShas: Set<string>;
     onJump: (sha: string) => void;
+    /** Loads another repository — a submodule, a working tree, or the parent. */
+    onOpenRepo: (path: string) => void;
   }
-  let { repoRefs, loadedShas, onJump }: Props = $props();
+  let { repoRefs, loadedShas, onJump, onOpenRepo }: Props = $props();
 
   // Glyphs as bare path data: the collapsed rail shows nothing but these, so
   // every one of them has to be recognisable without its label next to it.
@@ -26,6 +33,14 @@
     'M2 2h5.2a1.5 1.5 0 011.06.44l5.3 5.3a1.5 1.5 0 010 2.12l-3.7 3.7a1.5 1.5 0 01-2.12 0l-5.3-5.3A1.5 1.5 0 012 7.2V2zm2.75 1.5a1.25 1.25 0 100 2.5 1.25 1.25 0 000-2.5z';
   const ICON_FOLDER =
     'M1.5 3.5A1.5 1.5 0 013 2h3l1.5 1.5H13A1.5 1.5 0 0114.5 5v6.5A1.5 1.5 0 0113 13H3a1.5 1.5 0 01-1.5-1.5v-8z';
+  // A package: a repository nested inside this one, pinned to one commit.
+  const ICON_SUBMODULE =
+    'M8 1.2l6 3.3v6.9l-6 3.3-6-3.3V4.5l6-3.3zm0 1.6L3.6 5.2 8 7.6l4.4-2.4L8 2.8zM3 6.3v4.6l4.5 2.5V8.8L3 6.3zm10 0L8.5 8.8v4.6L13 10.9V6.3z';
+  const ICON_UP = 'M8 2.2l4.5 4.5-1.4 1.4L9 6v7.8H7V6L4.9 8.1 3.5 6.7 8 2.2z';
+  // The checked-out branch, and the working tree being viewed: a tick in a ring,
+  // so "you are here" is a shape and not only a colour.
+  const ICON_CHECK =
+    'M8 1a7 7 0 100 14A7 7 0 008 1zm3.6 4.9l-4.2 4.9a.9.9 0 01-1.3.1L3.9 8.9l1.2-1.4 1.5 1.3 3.6-4.2 1.4 1.3z';
 
   /** One row of the sidebar, whatever ref category it came from. */
   interface Entry {
@@ -41,6 +56,12 @@
     title: string;
     /** Glyph path, so a row reads as its category without its section in view. */
     icon: string;
+    /** "You are here" in words: the checked-out branch, the working tree on screen. */
+    mark?: string;
+    /** When set, selecting the row opens that repository instead of revealing a commit. */
+    openPath?: string;
+    /** Why the row cannot act — shown instead of the normal tooltip. */
+    blocked?: string;
   }
 
   function entry(name: string, sha: string, shortSha: string, rest: Partial<Entry> = {}): Entry {
@@ -60,6 +81,10 @@
     (repoRefs?.locals ?? []).map(b =>
       entry(b.name, b.sha, b.shortSha, {
         isHead: b.isHead,
+        // The one branch `HEAD` points at, said in words next to the name. The
+        // tracking counts stay their own badge — they answer a different
+        // question, and a branch can be checked out and ahead at once.
+        mark: b.isHead ? 'checked out' : undefined,
         badge: trackingBadge(b.ahead, b.behind),
         title: b.upstream ? `tracks ${b.upstream}` : 'no upstream configured',
       }),
@@ -73,15 +98,45 @@
     })),
   );
 
+  // A working tree row switches to that checkout: the history is the same
+  // object database, but HEAD, the checked-out branch and the working-directory
+  // node (ADR-0019) are that tree's own. The one being viewed is marked and
+  // inert, like a branch that is already HEAD.
   const worktrees = $derived(
     (repoRefs?.worktrees ?? []).map(w =>
       entry(w.name, w.sha, w.shortSha, {
+        isHead: w.isCurrent,
+        mark: w.isCurrent ? 'viewing' : undefined,
         badge: w.branch ?? 'detached',
         title: w.path,
         icon: ICON_TREE,
+        openPath: w.path,
+        blocked: w.isCurrent ? 'the working tree you are viewing' : undefined,
       }),
     ),
   );
+
+  // A submodule's commit belongs to *its* object database, so the row opens the
+  // repository instead of jumping (ADR-0022). Grouping runs on the path, so
+  // `vendor/a` and `vendor/b` fold into a folder like any other ref name.
+  const submodules = $derived(
+    (repoRefs?.submodules ?? []).map(sub =>
+      entry(sub.path, sub.sha, sub.shortSha, {
+        badge: sub.state === 'modified' ? 'modified' : sub.state === 'uninitialized' ? 'not initialized' : '',
+        title: [sub.url, sub.state === 'modified' ? `checked out at ${sub.checkedOutShortSha}` : '']
+          .filter(Boolean)
+          .join(' — '),
+        icon: ICON_SUBMODULE,
+        openPath: sub.workdir,
+        blocked:
+          sub.state === 'uninitialized'
+            ? 'not initialized — no working copy to open'
+            : undefined,
+      }),
+    ),
+  );
+
+  const parent = $derived(repoRefs?.parent ?? null);
 
   const tags = $derived(
     (repoRefs?.tags ?? []).map(t => entry(t.name, t.sha, t.shortSha, { icon: ICON_TAG })),
@@ -111,6 +166,12 @@
     },
     { key: 'worktrees', title: 'Worktrees', icon: ICON_TREE, count: visible(worktrees).length },
     { key: 'tags', title: 'Tags', icon: ICON_TAG, count: visible(tags).length },
+    {
+      key: 'submodules',
+      title: 'Submodules',
+      icon: ICON_SUBMODULE,
+      count: visible(submodules).length,
+    },
   ]);
 
   // ── Minimised state ───────────────────────────────────────────────────────
@@ -150,6 +211,7 @@
     remote: false,
     worktrees: false,
     tags: false,
+    submodules: false,
   });
 
   // Folders and remotes are open unless explicitly closed, so a fresh repository
@@ -173,31 +235,50 @@
     return sha !== '' && loadedShas.has(sha);
   }
 
-  function jump(sha: string): void {
-    if (canJump(sha)) onJump(sha);
+  /// Whether a row can act at all: a repository-switching row needs a path and
+  /// no blocking reason, every other row needs its commit in the loaded graph.
+  function canAct(item: Entry): boolean {
+    if (item.openPath !== undefined) return item.blocked === undefined && item.openPath !== '';
+    return canJump(item.sha);
+  }
+
+  /// The two row kinds part here: open a repository, or reveal a commit.
+  function activate(item: Entry): void {
+    if (!canAct(item)) return;
+    if (item.openPath !== undefined) onOpenRepo(item.openPath);
+    else onJump(item.sha);
+  }
+
+  function rowTitle(item: Entry): string {
+    if (item.blocked) return `${item.name} — ${item.blocked}`;
+    if (item.openPath !== undefined) {
+      return [`${item.name} — open this repository`, item.title].filter(Boolean).join(' — ');
+    }
+    if (!canJump(item.sha)) return `${item.name} — outside the loaded history`;
+    return [item.name, item.title].filter(Boolean).join(' — ');
   }
 </script>
 
-<!-- A leaf row. Rows whose commit is outside the loaded graph stay inert: at the
-     commit limit a ref can point at history that was never read (ADR-0009), and
-     a button that silently does nothing is worse than one that says why. -->
+<!-- A leaf row. Rows that cannot act stay inert and say why: at the commit limit
+     a ref can point at history that was never read (ADR-0009), a submodule may
+     never have been checked out, and a working tree may be the one on screen.
+     A button that silently does nothing is worse than one that explains. -->
 {#snippet leafRow(label: string, item: Entry, depth: number)}
-  {@const reachable = canJump(item.sha)}
+  {@const enabled = canAct(item)}
   <button
     class="row leaf"
     class:head={item.isHead}
-    class:unreachable={!reachable}
+    class:unreachable={!enabled}
     style="padding-left: {8 + depth * 12}px"
-    disabled={!reachable}
-    title={reachable
-      ? [item.name, item.title].filter(Boolean).join(' — ')
-      : `${item.name} — outside the loaded history`}
-    onclick={() => jump(item.sha)}
+    disabled={!enabled}
+    title={rowTitle(item)}
+    onclick={() => activate(item)}
   >
     <svg class="glyph" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <path d={item.icon} />
+      <path d={item.isHead ? ICON_CHECK : item.icon} />
     </svg>
     <span class="label">{label}</span>
+    {#if item.mark}<span class="mark">{item.mark}</span>{/if}
     {#if item.badge}<span class="badge">{item.badge}</span>{/if}
     <span class="sha">{item.shortSha}</span>
   </button>
@@ -209,8 +290,10 @@
     {@const key = `${keyPrefix}/${sub.path}`}
     <button
       class="row folder"
+      class:holds-head={anyLeaf(sub, e => e.isHead)}
       style="padding-left: {8 + depth * 12}px"
       onclick={() => toggleGroup(key)}
+      title={anyLeaf(sub, e => e.isHead) ? `${sub.name} — holds the checked-out branch` : sub.name}
     >
       <span class="caret" class:open={groupOpen(key)}>›</span>
       <svg class="glyph" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -269,6 +352,18 @@
     <!-- Minimised: glyphs only. Each is a way back in — it expands the sidebar
          and opens its own section, so the rail is never a dead end. -->
     <div class="rail">
+      {#if parent}
+        <button
+          class="rail-btn"
+          onclick={() => onOpenRepo(parent.path)}
+          title="Back to {parent.name}"
+          aria-label="Back to {parent.name}"
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d={ICON_UP} />
+          </svg>
+        </button>
+      {/if}
       {#each sections as item (item.key)}
         <button
           class="rail-btn"
@@ -285,6 +380,26 @@
     </div>
   {:else}
   <div class="sections">
+    <!-- The way out, when this repository sits inside another one. Read from
+         git rather than remembered, so it is there however the user arrived. -->
+    {#if parent}
+      <button
+        class="row parent"
+        onclick={() => onOpenRepo(parent.path)}
+        title="{parent.path} — open the {parent.kind === 'superproject'
+          ? 'superproject'
+          : 'main working tree'}"
+      >
+        <svg class="glyph" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d={ICON_UP} />
+        </svg>
+        <span class="label">{parent.name}</span>
+        <span class="badge"
+          >{parent.kind === 'superproject' ? 'superproject' : 'main tree'}</span
+        >
+      </button>
+    {/if}
+
     {@render section('local')}
     {#if openSections.local}
       {@render folderTree(tree(locals), 'local', 1)}
@@ -318,6 +433,11 @@
     {@render section('tags')}
     {#if openSections.tags}
       {@render folderTree(tree(tags), 'tags', 1)}
+    {/if}
+
+    {@render section('submodules')}
+    {#if openSections.submodules}
+      {@render folderTree(tree(submodules), 'submodules', 1)}
     {/if}
   </div>
   {/if}
@@ -486,6 +606,23 @@
     background: var(--bg-hover);
   }
 
+  /* The way out of a submodule or a linked worktree. It sits above the
+     sections and reads as a destination, not as one more ref. */
+  .row.parent {
+    height: 26px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2px;
+  }
+  .row.parent .label {
+    font-weight: 600;
+  }
+  .row.parent .badge {
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+  }
+
   .row.section {
     height: 26px;
     color: var(--text-dim);
@@ -507,6 +644,16 @@
     font-weight: 600;
   }
 
+  /* A collapsed folder must not swallow the checked-out branch: the folders on
+     the way to it are tinted, without taking the accent background that marks
+     the branch row itself. */
+  .row.folder.holds-head {
+    color: var(--accent);
+  }
+  .row.folder.holds-head .glyph {
+    color: var(--accent);
+  }
+
   .row.head:hover:not(:disabled) {
     background: var(--accent-bg-strong);
   }
@@ -517,13 +664,18 @@
     color: var(--text-faint);
     cursor: default;
   }
+  /* The working tree being viewed is marked, not faded: it is where the user
+     already is, and inert only because there is nowhere left to go. */
+  .row.head.unreachable {
+    color: var(--accent);
+  }
 
   .caret {
     display: inline-block;
     width: 10px;
     flex-shrink: 0;
     color: var(--text-dim);
-    transition: transform 0.12s;
+    transition: transform var(--transition);
   }
 
   .caret.open {
@@ -557,8 +709,23 @@
     color: var(--text-dim);
   }
 
+  /* Says outright what the accent and the tick only imply. A pill rather than
+     more dim text, so it reads as a status and not as one more count. */
+  .mark {
+    flex-shrink: 0;
+    padding: 1px 5px;
+    border: 1px solid var(--accent-border-strong);
+    border-radius: var(--radius-xs);
+    background: var(--accent-bg-strong);
+    color: var(--accent-bright);
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
   .sha {
-    font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     color: var(--text-dimmer);
   }
 

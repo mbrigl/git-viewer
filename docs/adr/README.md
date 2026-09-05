@@ -50,6 +50,7 @@ in the repository root). ADRs derive from the specification in [`docs/SPECIFICAT
 | [0019](0019-synthetic-stash-and-workdir-nodes.md) | Stashes and uncommitted changes as synthetic nodes | 🟢 accepted |
 | [0020](0020-tag-triggered-release-pipeline.md) | Tag-triggered release pipeline with installers and a Flatpak bundle | 🟡 proposed |
 | [0021](0021-repository-sidebar-ref-tree.md) | Repository sidebar — a navigable tree of branches, remotes, worktrees, and tags | 🟡 proposed |
+| [0022](0022-submodules-and-repository-switching.md) | Submodules, and switching the viewed repository from the sidebar | 🟡 proposed |
 
 **Consolidation history.** While every ADR involved was still `proposed`, and while nothing outside
 this directory referenced their numbers, three pairs were consolidated and the set was then renumbered

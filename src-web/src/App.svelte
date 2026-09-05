@@ -160,6 +160,15 @@
     await invoke('open_repo', { path: currentRepoPath }).catch((e: unknown) => { status = 'Error: ' + e; });
   }
 
+  /// Switches to another repository the sidebar points at — a submodule, a
+  /// working tree, or the parent module (ADR-0022). It is the same load the
+  /// folder picker triggers, so the graph, the refs and the label all follow.
+  async function openRepoPath(path: string): Promise<void> {
+    if (!path) return;
+    status = 'Opening…';
+    await invoke('open_repo', { path }).catch((e: unknown) => { status = 'Error: ' + e; });
+  }
+
   function onSelectCommit(sha: string): void {
     const node = nodeBySha.get(sha) ?? null;
     selectedNode = node;
@@ -245,7 +254,12 @@
 <!-- ── Main content area ──────────────────────────────────────────────────── -->
 <div id="main">
   <div id="top-pane">
-    <RepoSidebar {repoRefs} loadedShas={new Set(nodeBySha.keys())} onJump={jumpToSha} />
+    <RepoSidebar
+      {repoRefs}
+      loadedShas={new Set(nodeBySha.keys())}
+      onJump={jumpToSha}
+      onOpenRepo={openRepoPath}
+    />
 
     <div id="graph-pane">
       <!-- Column header — inside the graph pane so it shares the canvas width,

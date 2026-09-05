@@ -72,6 +72,35 @@ export interface Worktree {
   shortSha: string;
   /** The repository's main working tree, which git2 does not list as a worktree. */
   isMain: boolean;
+  /** The working tree currently being viewed — selecting it would go nowhere. */
+  isCurrent: boolean;
+}
+
+/** Serde serializes the Rust enum variants camelCase. */
+export type SubmoduleState = 'uninitialized' | 'modified' | 'inSync';
+
+export interface Submodule {
+  name: string;
+  /** Path relative to the superproject's working directory. */
+  path: string;
+  /** Absolute path of the working copy; empty when uninitialized. */
+  workdir: string;
+  url: string | null;
+  /** The commit the superproject pins — a commit of the *submodule's* history. */
+  sha: string;
+  shortSha: string;
+  /** The commit actually checked out, null when there is no working copy. */
+  checkedOutShortSha: string | null;
+  state: SubmoduleState;
+}
+
+/** What kind of repository the current one sits inside (ADR-0022). */
+export type ParentKind = 'superproject' | 'mainWorktree';
+
+export interface ParentRepo {
+  kind: ParentKind;
+  name: string;
+  path: string;
 }
 
 export interface Tag {
@@ -85,6 +114,9 @@ export interface RepoRefs {
   remotes: Remote[];
   worktrees: Worktree[];
   tags: Tag[];
+  submodules: Submodule[];
+  /** Null when this repository is neither a submodule nor a linked worktree. */
+  parent: ParentRepo | null;
 }
 
 /** Serde serializes the Rust enum variants camelCase — the statuses arrive lowercase. */

@@ -134,6 +134,64 @@ pub struct Worktree {
     /// True for the repository's main working tree, which `git2` does not
     /// report as a worktree of its own.
     pub is_main: bool,
+    /// True for the working tree currently being viewed — selecting it would
+    /// switch to where the user already is (ADR-0022).
+    pub is_current: bool,
+}
+
+/// How a submodule's working copy stands to the commit the superproject pins.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum SubmoduleState {
+    /// Configured, but no working copy on disk. Nothing to open, and the viewer
+    /// never clones one — that would be both a write and egress (ADR-0016).
+    Uninitialized,
+    /// Checked out at a different commit than the superproject records.
+    Modified,
+    /// Checked out at exactly the pinned commit.
+    InSync,
+}
+
+/// A submodule of this repository: a pinned commit in a *different* object
+/// database, which is why it is opened rather than revealed (ADR-0022).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Submodule {
+    /// The name from `.gitmodules`, which may differ from the path.
+    pub name: String,
+    /// Path relative to the superproject's working directory.
+    pub path: String,
+    /// Absolute path of the working copy, empty when uninitialized.
+    pub workdir: String,
+    pub url: Option<String>,
+    /// The commit the superproject pins, empty when it records none.
+    pub sha: String,
+    pub short_sha: String,
+    /// The commit actually checked out, when there is a working copy.
+    pub checked_out_short_sha: Option<String>,
+    pub state: SubmoduleState,
+}
+
+/// What kind of repository the current one sits inside.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum ParentKind {
+    /// The superproject that configures this repository as a submodule.
+    Superproject,
+    /// The main working tree, when a linked worktree is being viewed.
+    MainWorktree,
+}
+
+/// The repository one level up, so the sidebar can navigate back out of a
+/// submodule or a linked worktree (ADR-0022). Read from git rather than
+/// remembered by the UI, so the way back exists however the user arrived.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParentRepo {
+    pub kind: ParentKind,
+    /// Directory name, for the row's label.
+    pub name: String,
+    pub path: String,
 }
 
 /// A tag, peeled so an annotated tag resolves to the commit it marks.
@@ -153,6 +211,9 @@ pub struct RepoRefs {
     pub remotes: Vec<Remote>,
     pub worktrees: Vec<Worktree>,
     pub tags: Vec<Tag>,
+    pub submodules: Vec<Submodule>,
+    /// Absent when this repository is neither a submodule nor a linked worktree.
+    pub parent: Option<ParentRepo>,
 }
 
 #[derive(Debug, Serialize, Clone, PartialEq)]
